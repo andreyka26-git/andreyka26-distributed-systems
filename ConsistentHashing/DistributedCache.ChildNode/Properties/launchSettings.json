@@ -9,7 +9,7 @@
     }
   },
   "profiles": {
-    "DistributedCache.ConsistentHashing.ChildNode": {
+    "DistributedCache.ChildNode": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
