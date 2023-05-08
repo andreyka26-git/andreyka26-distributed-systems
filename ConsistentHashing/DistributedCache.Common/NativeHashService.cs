@@ -1,4 +1,4 @@
-﻿namespace DistributedCache.ConsistentHashing.Common
+﻿namespace DistributedCache.Common
 {
     public class NativeHashService
     {

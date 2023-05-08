@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace DistributedCache.ConsistentHashing.ChildNode.Controllers
+namespace DistributedCache.ChildNode.Controllers
 {
     [ApiController]
     [Route("[controller]")]

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace DistributedCache.ConsistentHashing.LoadBalancer.Controllers
+namespace DistributedCache.LoadBalancer.Controllers
 {
     [ApiController]
     [Route("[controller]")]

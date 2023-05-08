@@ -9,7 +9,7 @@
     }
   },
   "profiles": {
-    "DistributedCache.ConsistentHashing.LoadBalancer": {
+    "DistributedCache.LoadBalancer": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
