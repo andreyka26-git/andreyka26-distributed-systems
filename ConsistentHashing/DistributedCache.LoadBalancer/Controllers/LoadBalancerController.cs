@@ -3,8 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace DistributedCache.LoadBalancer.Controllers
 {
     [ApiController]
-    [Route("[controller]")]
-    public class WeatherForecastController : ControllerBase
+    [Route("load-balancer")]
+    public class LoadBalancerController : ControllerBase
     {
+
     }
 }

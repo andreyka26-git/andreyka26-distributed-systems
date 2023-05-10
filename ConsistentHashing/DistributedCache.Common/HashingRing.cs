@@ -14,25 +14,35 @@ namespace DistributedCache.Common
 
         public uint MaxValue => _hashService.MaxHashValue;
 
-        public VirtualNode GetVirtualNodeForHash(uint ringPosition)
+        public void AddVirtualNode(VirtualNode virtualNode)
         {
-            
-            var sortedPositions = _virtualNodes.Keys;
-
-            var position = BinarySearchNearest(sortedPositions, ringPosition);
+            _virtualNodes.Add(virtualNode.RingPosition, virtualNode);
         }
 
-        // handle [0, 1, 8, max]; [0, 1, max]
-        public uint BinarySearchNearest(IList<uint> positions, uint position)
+        public VirtualNode GetVirtualNodeForHash(uint keyPosition)
         {
+            var sortedNodePositions = _virtualNodes.Keys;
+            var nodePosition = BinarySearchRightMostNode(sortedNodePositions, keyPosition);
+
+            var node = _virtualNodes[nodePosition];
+
+            return node;
+        }
+
+        public uint BinarySearchRightMostNode(IList<uint> nodePositions, uint keyPosition)
+        {
+            // in case keyPosition is bigger than MaxValue (if we consider to use real 360 degree circle or any other scale)
+            // we should adjust it to max value of ring
+            keyPosition = keyPosition % MaxValue;
+
             var start = 0;
-            var end = positions.Count - 1;
+            var end = nodePositions.Count - 1;
 
             while (start != end)
             {
-                var mid = (end - start) / 2;
+                var mid = ((end - start) / 2) + start;
 
-                if (position <= positions[mid])
+                if (keyPosition <= nodePositions[mid])
                 {
                     end = mid;
                 }
@@ -42,7 +52,15 @@ namespace DistributedCache.Common
                 }
             }
 
-            return positions[start];
+            var nodePosition = nodePositions[start];
+
+            // if your key is after node but before MaxHashValue - we return first node (because it is hash circle)
+            if (keyPosition > nodePosition)
+            {
+                return nodePositions[0];
+            }
+
+            return nodePosition;
         }
     }
 }
