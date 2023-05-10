@@ -1,7 +1,7 @@
 ﻿using Newtonsoft.Json;
 using System.Text;
 
-namespace DistributedCache.Common
+namespace DistributedCache.Common.Serializers
 {
     public class NewtonsoftSerializer : IBinarySerializer
     {

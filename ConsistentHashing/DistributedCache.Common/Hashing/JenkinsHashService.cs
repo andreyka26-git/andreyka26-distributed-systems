@@ -1,12 +1,15 @@
 ﻿using System.Data.HashFunction.Jenkins;
+using DistributedCache.Common.Serializers;
 
-namespace DistributedCache.Common
+namespace DistributedCache.Common.Hashing
 {
     // https://en.wikipedia.org/wiki/Jenkins_hash_function
     // We are using separate hash function algorithm (not GetHashCode()) because
     // GetHashCode is not that stable, and we would like to not be coupled to C#
     public class JenkinsHashService : IHashService
     {
+        public static readonly uint JenkinsMaxHashValue = int.MaxValue;
+
         private readonly IJenkinsOneAtATime _jenkinsOneAtATime = JenkinsOneAtATimeFactory.Instance.Create();
 
         private readonly IBinarySerializer _serializer;
@@ -15,6 +18,9 @@ namespace DistributedCache.Common
         {
             _serializer = serializer;
         }
+
+        // from algorithm specification 32 bit max
+        public uint MaxHashValue => JenkinsMaxHashValue;
 
         public uint GetHash<T>(T key)
         {

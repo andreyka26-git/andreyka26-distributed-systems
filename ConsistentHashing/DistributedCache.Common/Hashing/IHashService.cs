@@ -1,7 +1,8 @@
-﻿namespace DistributedCache.Common
+﻿namespace DistributedCache.Common.Hashing
 {
     public interface IHashService
     {
+        uint MaxHashValue { get; }
         uint GetHash<T>(T key);
     }
 }

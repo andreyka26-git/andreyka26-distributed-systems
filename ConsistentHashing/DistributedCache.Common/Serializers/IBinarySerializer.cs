@@ -1,4 +1,4 @@
-﻿namespace DistributedCache.Common
+﻿namespace DistributedCache.Common.Serializers
 {
     public interface IBinarySerializer
     {
