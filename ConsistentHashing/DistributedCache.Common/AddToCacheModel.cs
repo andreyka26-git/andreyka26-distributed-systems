@@ -2,5 +2,5 @@
 
 namespace DistributedCache.Common
 {
-    public record AddToCacheDto(VirtualNode Node, uint KeyHash, string Value);
+    public record AddToCacheModel(VirtualNode VirtualNode, uint KeyHash, string Value);
 }

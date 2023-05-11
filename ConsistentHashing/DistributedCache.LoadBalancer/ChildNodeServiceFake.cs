@@ -7,10 +7,10 @@ namespace DistributedCache.LoadBalancer
     {
         private readonly Dictionary<VirtualNode, Dictionary<uint, string>> _nodeToCacheMapping = new Dictionary<VirtualNode, Dictionary<uint, string>>();
 
-        public Task AddToCacheAsync(AddToCacheDto addDto, PhysicalNode physicalNode, CancellationToken cancellationToken)
+        public Task AddToCacheAsync(AddToCacheModel addModel, PhysicalNode physicalNode, CancellationToken cancellationToken)
         {
-            var cache = _nodeToCacheMapping[addDto.Node];
-            cache[addDto.KeyHash] = addDto.Value;
+            var cache = _nodeToCacheMapping[addModel.VirtualNode];
+            cache[addModel.KeyHash] = addModel.Value;
 
             return Task.CompletedTask;
         }

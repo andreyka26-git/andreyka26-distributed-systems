@@ -2,6 +2,7 @@ using DistributedCache.Common;
 using DistributedCache.Common.Hashing;
 using DistributedCache.Common.NodeManagement;
 using Microsoft.AspNetCore.Mvc;
+using System.Data;
 
 namespace DistributedCache.LoadBalancer.Controllers
 {
@@ -26,8 +27,8 @@ namespace DistributedCache.LoadBalancer.Controllers
             _childNodeService = childNodeService;
         }
 
-        [HttpGet("")]
-        public async Task<IActionResult> GetValueAsync(string key, CancellationToken cancellationToken)
+        [HttpGet("{key}")]
+        public async Task<IActionResult> GetValueAsync([FromRoute] string key, CancellationToken cancellationToken)
         {
             var hashKey = _hashService.GetHash(key);
 
@@ -36,6 +37,19 @@ namespace DistributedCache.LoadBalancer.Controllers
 
             var value = await _childNodeService.GetFromCacheAsync(hashKey, virtualNode, physicalNode, cancellationToken);
             return Ok(value);
+        }
+
+        [HttpPost("{key}")]
+        public async Task<IActionResult> AddValueAsync([FromRoute] string key, [FromBody] string value, CancellationToken cancellationToken)
+        {
+            var hashKey = _hashService.GetHash(key);
+            var virtualNode = _hashingRing.GetVirtualNodeForHash(hashKey);
+            var physicalNode = _nodeManager.ResolvePhysicalNode(virtualNode);
+
+            var addToCacheModel = new AddToCacheModel(virtualNode, hashKey, value);
+            await _childNodeService.AddToCacheAsync(addToCacheModel, physicalNode, cancellationToken);
+
+            return Ok();
         }
     }
 }
