@@ -1,5 +1,6 @@
 ﻿using DistributedCache.Common;
 using DistributedCache.Common.Hashing;
+using DistributedCache.Common.NodeManagement;
 using Moq;
 
 namespace DistributedCache.UnitTests

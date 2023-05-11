@@ -1,8 +1,9 @@
 ﻿using DistributedCache.Common.Hashing;
+using DistributedCache.Common.NodeManagement;
 
 namespace DistributedCache.Common
 {
-    public class HashingRing
+    public class HashingRing : IHashingRing
     {
         private readonly IHashService _hashService;
         private readonly SortedList<uint, VirtualNode> _virtualNodes = new SortedList<uint, VirtualNode>();
@@ -14,6 +15,13 @@ namespace DistributedCache.Common
 
         public uint MaxValue => _hashService.MaxHashValue;
 
+        //TODO thread safety if add/remove/get in parallel
+        public void RemoveVirtualNode(uint nodePosition)
+        {
+            _virtualNodes.Remove(nodePosition);
+        }
+
+        //TODO thread safety if add/remove/get in parallel
         public void AddVirtualNode(VirtualNode virtualNode)
         {
             _virtualNodes.Add(virtualNode.RingPosition, virtualNode);
