@@ -1,8 +1,8 @@
 using DistributedCache.Common;
+using DistributedCache.Common.Clients;
 using DistributedCache.Common.Hashing;
 using DistributedCache.Common.NodeManagement;
 using Microsoft.AspNetCore.Mvc;
-using System.Data;
 
 namespace DistributedCache.LoadBalancer.Controllers
 {
@@ -13,13 +13,13 @@ namespace DistributedCache.LoadBalancer.Controllers
         private readonly INodeManager _nodeManager;
         private readonly IHashService _hashService;
         private readonly IHashingRing _hashingRing;
-        private readonly IChildNodeService _childNodeService;
+        private readonly IChildNodeClient _childNodeService;
 
         public LoadBalancerController(
             INodeManager nodeManager,
             IHashService hashService,
             IHashingRing hashingRing,
-            IChildNodeService childNodeService)
+            IChildNodeClient childNodeService)
         {
             _nodeManager = nodeManager;
             _hashService = hashService;
