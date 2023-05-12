@@ -4,13 +4,29 @@ namespace DistributedCache.Common
 {
     public class ChildNodeInMemoryCache : IChildNodeInMemoryCache
     {
+        private readonly int _maxNodeItemsCount;
+
         private readonly Dictionary<uint, string> _cache = new Dictionary<uint, string>();
         private readonly SortedList<uint, uint> _sortedCacheHashes = new SortedList<uint, uint>();
 
-        public void AddToCache(uint keyHash, string value)
+        public int NodeRingPosition { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
+        public ChildNodeInMemoryCache(int maxNodeItemsCount)
+        {
+            _maxNodeItemsCount = maxNodeItemsCount;
+        }
+
+        public bool AddToCache(uint keyHash, string value)
         {
             _cache[keyHash] = value;
             _sortedCacheHashes[keyHash] = keyHash;
+
+            if (GetCountOfItems() >= _maxNodeItemsCount)
+            {
+                return true;
+            }
+
+            return false;
         }
 
         public void AddBulkToCache(Dictionary<uint, string> cacheItems)
