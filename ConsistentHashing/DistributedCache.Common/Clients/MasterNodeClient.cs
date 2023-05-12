@@ -1,4 +1,6 @@
-﻿namespace DistributedCache.Common.Clients
+﻿using DistributedCache.Common.NodeManagement;
+
+namespace DistributedCache.Common.Clients
 {
     public class MasterNodeClient : IMasterNodeClient
     {

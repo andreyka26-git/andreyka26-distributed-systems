@@ -19,6 +19,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DistributedCache.Common\DistributedCache.Common.csproj" />
+    <ProjectReference Include="..\DistributedCache.LoadBalancer\DistributedCache.LoadBalancer.csproj" />
+    <ProjectReference Include="..\DistributedCache.Master\DistributedCache.Master.csproj" />
   </ItemGroup>
 
 </Project>

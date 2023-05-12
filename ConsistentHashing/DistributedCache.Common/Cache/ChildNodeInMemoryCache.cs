@@ -1,5 +1,4 @@
 ﻿using DistributedCache.Common.Cache;
-using System.Collections.Generic;
 
 namespace DistributedCache.Common
 {
@@ -12,6 +11,19 @@ namespace DistributedCache.Common
         {
             _cache[keyHash] = value;
             _sortedCacheHashes[keyHash] = keyHash;
+        }
+
+        public void AddBulkToCache(Dictionary<uint, string> cacheItems)
+        {
+            foreach(var kvp in cacheItems)
+            {
+                if (_cache.ContainsKey(kvp.Key))
+                {
+                    continue;
+                }
+
+                AddToCache(kvp.Key, kvp.Value);
+            }
         }
 
         public void RemoveFromCache(uint keyHash)

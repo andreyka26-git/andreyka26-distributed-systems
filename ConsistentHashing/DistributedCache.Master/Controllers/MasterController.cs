@@ -19,12 +19,12 @@ namespace DistributedCache.Master.Controllers
             INodeManager nodeManager,
             IHashService hashService,
             IHashingRing hashingRing,
-            IChildNodeClient childNodeService)
+            IChildNodeClient childNodeClient)
         {
             _nodeManager = nodeManager;
             _hashService = hashService;
             _hashingRing = hashingRing;
-            _childNodeService = childNodeService;
+            _childNodeService = childNodeClient;
         }
 
 

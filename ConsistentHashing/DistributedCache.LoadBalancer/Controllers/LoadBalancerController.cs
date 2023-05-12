@@ -13,18 +13,18 @@ namespace DistributedCache.LoadBalancer.Controllers
         private readonly INodeManager _nodeManager;
         private readonly IHashService _hashService;
         private readonly IHashingRing _hashingRing;
-        private readonly IChildNodeClient _childNodeService;
+        private readonly IChildNodeClient _childNodeClient;
 
         public LoadBalancerController(
             INodeManager nodeManager,
             IHashService hashService,
             IHashingRing hashingRing,
-            IChildNodeClient childNodeService)
+            IChildNodeClient childNodeClient)
         {
             _nodeManager = nodeManager;
             _hashService = hashService;
             _hashingRing = hashingRing;
-            _childNodeService = childNodeService;
+            _childNodeClient = childNodeClient;
         }
 
         [HttpGet("{key}")]
@@ -35,7 +35,7 @@ namespace DistributedCache.LoadBalancer.Controllers
             var virtualNode = _hashingRing.GetVirtualNodeForHash(hashKey);
             var physicalNode = _nodeManager.ResolvePhysicalNode(virtualNode);
 
-            var value = await _childNodeService.GetFromCacheAsync(hashKey, virtualNode, physicalNode, cancellationToken);
+            var value = await _childNodeClient.GetFromCacheAsync(hashKey, virtualNode, physicalNode, cancellationToken);
             return Ok(value);
         }
 
@@ -47,7 +47,7 @@ namespace DistributedCache.LoadBalancer.Controllers
             var physicalNode = _nodeManager.ResolvePhysicalNode(virtualNode);
 
             var addToCacheModel = new AddToCacheModel(virtualNode, hashKey, value);
-            await _childNodeService.AddToCacheAsync(addToCacheModel, physicalNode, cancellationToken);
+            await _childNodeClient.AddToCacheAsync(addToCacheModel, physicalNode, cancellationToken);
 
             return Ok();
         }
