@@ -1,5 +1,4 @@
-﻿using DistributedCache.Common.Clients;
-using DistributedCache.Common.NodeManagement;
+﻿using DistributedCache.Common.NodeManagement;
 using DistributedCache.Common;
 using DistributedCache.Common.Cache;
 

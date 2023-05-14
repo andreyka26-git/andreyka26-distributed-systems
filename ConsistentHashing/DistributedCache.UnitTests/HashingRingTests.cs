@@ -65,7 +65,7 @@ namespace DistributedCache.UnitTests
         {
             foreach(var nodePos in nodePositions)
             {
-                _hashingRing.AddVirtualNode(new VirtualNode(nodePos));
+                _hashingRing.AddVirtualNode(new VirtualNode(nodePos, 10));
             }
 
             var nodePosition = _hashingRing.GetVirtualNodeForHash(keyPosition);

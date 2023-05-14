@@ -1,6 +1,6 @@
 ﻿using DistributedCache.Common.NodeManagement;
 
-namespace DistributedCache.Common.Clients
+namespace DistributedCache.Common
 {
     public interface IRebalancingQueue
     {

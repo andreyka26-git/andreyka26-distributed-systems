@@ -7,6 +7,18 @@
         // uint is a ring position, we agreed that it is unique identifier of the virtual node.
         private readonly Dictionary<PhysicalNode, Dictionary<uint, VirtualNode>> _physicalToVirtualMapping = new Dictionary<PhysicalNode, Dictionary<uint, VirtualNode>>();
 
+        private readonly IHashingRing _hashingRing;
+
+        public NodeManager(IHashingRing hashingRing)
+        {
+            _hashingRing = hashingRing;
+        }
+
+        public VirtualNode GetVirtualNodeForHash(uint keyPosition)
+        {
+            return _hashingRing.GetVirtualNodeForHash(keyPosition);
+        }
+
         public PhysicalNode ResolvePhysicalNode(VirtualNode virtualNode)
         {
             return _virtualToPhysicalMapping[virtualNode];
@@ -27,6 +39,8 @@
             }
 
             _physicalToVirtualMapping[toPhysicalNode][virtualNode.RingPosition] = virtualNode;
+
+            _hashingRing.AddVirtualNode(virtualNode);
         }
 
         public void RemoveVirtualNode(VirtualNode virtualNode, PhysicalNode physicalNode)
@@ -35,6 +49,8 @@
 
             var virtualNodes = _physicalToVirtualMapping[physicalNode];
             virtualNodes.Remove(virtualNode.RingPosition);
+
+            _hashingRing.RemoveVirtualNode(virtualNode.RingPosition);
         }
     }
 }
