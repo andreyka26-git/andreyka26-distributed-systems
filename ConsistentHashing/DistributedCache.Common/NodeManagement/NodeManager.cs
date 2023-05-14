@@ -20,7 +20,21 @@
         public void AddVirtualNode(VirtualNode virtualNode, PhysicalNode toPhysicalNode)
         {
             _virtualToPhysicalMapping[virtualNode] = toPhysicalNode;
+
+            if (!_physicalToVirtualMapping.ContainsKey(toPhysicalNode))
+            {
+                AddPhysicalNode(toPhysicalNode);
+            }
+
             _physicalToVirtualMapping[toPhysicalNode][virtualNode.RingPosition] = virtualNode;
+        }
+
+        public void RemoveVirtualNode(VirtualNode virtualNode, PhysicalNode physicalNode)
+        {
+            _virtualToPhysicalMapping.Remove(virtualNode);
+
+            var virtualNodes = _physicalToVirtualMapping[physicalNode];
+            virtualNodes.Remove(virtualNode.RingPosition);
         }
     }
 }

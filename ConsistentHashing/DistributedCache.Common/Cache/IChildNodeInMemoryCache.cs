@@ -2,7 +2,6 @@
 {
     public interface IChildNodeInMemoryCache
     {
-        int NodeRingPosition { get; set; }
         bool AddToCache(uint keyHash, string value);
         void AddBulkToCache(Dictionary<uint, string> cacheItems);
         void RemoveFromCache(uint keyHash);

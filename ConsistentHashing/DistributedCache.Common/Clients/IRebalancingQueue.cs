@@ -2,7 +2,7 @@
 
 namespace DistributedCache.Common.Clients
 {
-    public interface IMasterNodeClient
+    public interface IRebalancingQueue
     {
         Task EmitNodeRebalancingAsync(VirtualNode hotVirtualNode, CancellationToken cancellationToken);
     }

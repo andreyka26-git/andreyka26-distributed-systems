@@ -9,8 +9,6 @@ namespace DistributedCache.Common
         private readonly Dictionary<uint, string> _cache = new Dictionary<uint, string>();
         private readonly SortedList<uint, uint> _sortedCacheHashes = new SortedList<uint, uint>();
 
-        public int NodeRingPosition { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
-
         public ChildNodeInMemoryCache(int maxNodeItemsCount)
         {
             _maxNodeItemsCount = maxNodeItemsCount;

@@ -1,9 +1,5 @@
-using DistributedCache.Common;
-using DistributedCache.Common.Clients;
-using DistributedCache.Common.Hashing;
 using DistributedCache.Common.NodeManagement;
 using Microsoft.AspNetCore.Mvc;
-using System.Threading;
 
 namespace DistributedCache.Master.Controllers
 {
@@ -11,47 +7,17 @@ namespace DistributedCache.Master.Controllers
     [Route("master")]
     public class MasterController : ControllerBase
     {
-        private readonly IChildNodeClient _childClient;
-        private readonly INodeManager _nodeManager;
-        private readonly IPhysicalNodeProvider _physicalNodeProvider;
-        private readonly List<ILoadBalancerNodeClient> _loadBalancers;
+        private readonly IMasterService _masterService;
 
-        public MasterController(
-            IChildNodeClient childClient,
-            INodeManager nodeManager,
-            IPhysicalNodeProvider physicalNodeProvider,
-            List<ILoadBalancerNodeClient> loadBalancers)
+        public MasterController(IMasterService masterService)
         {
-            _childClient = childClient;
-            _nodeManager = nodeManager;
-            _physicalNodeProvider = physicalNodeProvider;
-            _loadBalancers = loadBalancers;
+            _masterService = masterService;
         }
 
-        // TODO make it serializable
-        // TODO make it serializable
-        // TODO make it serializable
-        // TODO make it serializable
         [HttpPost("rebalance")]
         public async Task<IActionResult> RebalanceNodeAsync([FromBody] VirtualNode hotVirtualNode, CancellationToken cancellationToken)
         {
-            var hotPhysicalNode = _nodeManager.ResolvePhysicalNode(hotVirtualNode);
-
-            var newPhysicalNode = _physicalNodeProvider.CreateNewPhysicalNode();
-            var firstHalf = await _childClient.GetFirstHalfOfCacheAsync(hotVirtualNode, hotPhysicalNode, cancellationToken);
-
-            var nodePosition = firstHalf.Last().Key;
-            var newVirtualNode = new VirtualNode(nodePosition);
-
-            foreach (var loadBalacer in _loadBalancers)
-            {
-                await loadBalacer.AddVirtualNodeAsync(newVirtualNode, cancellationToken);
-            }
-
-            await _childClient.AddNewVirtualNodeAsync(newPhysicalNode, newVirtualNode, cancellationToken);
-            await _childClient.AddFirstHalfToNewNodeAsync(firstHalf, newVirtualNode, newPhysicalNode, cancellationToken);
-
-            await _childClient.RemoveFirstHalfOfCache(nodePosition, hotVirtualNode, hotPhysicalNode, cancellationToken);
+            await _masterService.RebalanceNodeAsync(hotVirtualNode, cancellationToken);
 
             return Ok();
         }
