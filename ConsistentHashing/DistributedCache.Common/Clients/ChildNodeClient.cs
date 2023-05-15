@@ -32,27 +32,37 @@ namespace DistributedCache.Common.Clients
         public async Task<int> GetCountOfItemsAsync(VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
         {
             var url = $"{physicalNode.Location}/child-node/{virtualNode.RingPosition}/count";
-            await _httpClient.GetAsync<int>(new Uri(url), cancellationToken);
+            var count = await _httpClient.GetAsync<int>(new Uri(url), cancellationToken);
+
+            return count;
         }
 
         public async Task<Dictionary<uint, string>> GetFirstHalfOfCacheAsync(VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            var url = $"{physicalNode.Location}/child-node/{virtualNode.RingPosition}/firstHalf";
+            var items = await _httpClient.GetAsync<Dictionary<uint, string>>(new Uri(url), cancellationToken);
+
+            return items;
         }
 
         public async Task<string> GetFromCacheAsync(uint keyHash, VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            var url = $"{physicalNode.Location}/child-node/{virtualNode.RingPosition}/{keyHash}";
+            var value = await _httpClient.GetAsync<string>(new Uri(url), cancellationToken);
+
+            return value;
         }
 
         public async Task RemoveFirstHalfOfCache(uint lastKeyHashInclusively, VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            var url = $"{physicalNode.Location}/child-node/{virtualNode.RingPosition}/firstHalf";
+            await _httpClient.DeleteAsync(new Uri(url), cancellationToken);
         }
 
         public async Task RemoveVirtualNodeAsync(PhysicalNode physicalNode, VirtualNode virtualNode, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            var url = $"{physicalNode.Location}/child-node/nodes/{virtualNode.RingPosition}";
+            await _httpClient.DeleteAsync(new Uri(url), cancellationToken);
         }
     }
 }

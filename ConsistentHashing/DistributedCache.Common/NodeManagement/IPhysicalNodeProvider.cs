@@ -2,6 +2,6 @@
 {
     public interface IPhysicalNodeProvider
     {
-        PhysicalNode CreateNewPhysicalNode();
+        Task<PhysicalNode> CreateNewPhysicalNodeAsync();
     }
 }

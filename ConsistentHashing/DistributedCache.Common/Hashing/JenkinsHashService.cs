@@ -24,7 +24,7 @@ namespace DistributedCache.Common.Hashing
 
         public uint GetHash<T>(T key)
         {
-            var bytes = _serializer.Serialize(key);
+            var bytes = _serializer.SerializeToBinary(key);
 
             // according to https://en.wikipedia.org/wiki/Jenkins_hash_function
             // hash value is 32 bit integer (uint32_t)

@@ -2,7 +2,8 @@
 {
     public interface IBinarySerializer
     {
-        byte[] Serialize<T>(T obj);
-        T? Deserialize<T>(string str) where T : class;
+        string SerializeToJson<T>(T obj);
+        byte[] SerializeToBinary<T>(T obj);
+        T? Deserialize<T>(string str);
     }
 }

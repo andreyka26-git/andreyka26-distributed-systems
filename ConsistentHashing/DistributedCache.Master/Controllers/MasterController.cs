@@ -14,6 +14,12 @@ namespace DistributedCache.Master.Controllers
             _masterService = masterService;
         }
 
+        [HttpGet("create-new")]
+        public async Task CreateNewNodeAsync(CancellationToken cancellationToken)
+        {
+
+        }
+
         [HttpPost("rebalance")]
         public async Task<IActionResult> RebalanceNodeAsync([FromBody] VirtualNode hotVirtualNode, CancellationToken cancellationToken)
         {

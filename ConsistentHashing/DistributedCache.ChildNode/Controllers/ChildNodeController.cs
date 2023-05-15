@@ -22,9 +22,9 @@ namespace DistributedCache.ChildNode.Controllers
         }
 
         [HttpDelete("nodes/{position}")]
-        public async Task<IActionResult> RemoveNodeAsync([FromRoute] uint position, CancellationToken cancellation)
+        public async Task<IActionResult> RemoveNodeAsync([FromRoute] uint position, CancellationToken cancellationToken)
         {
-            await _childNodeService.RemoveNodeAsync(position, cancellation);
+            await _childNodeService.RemoveNodeAsync(position, cancellationToken);
             return Ok();
         }
 
