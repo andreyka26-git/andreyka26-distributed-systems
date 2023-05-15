@@ -1,4 +1,5 @@
 ﻿using DistributedCache.Common.Cache;
+using DistributedCache.Common.InformationModels;
 using DistributedCache.Common.NodeManagement;
 using Microsoft.AspNetCore.Mvc;
 
@@ -6,6 +7,7 @@ namespace DistributedCache.ChildNode
 {
     public interface IChildNodeService
     {
+        Task<ChildInformationModel> GetChildClusterInformationModelAsync(CancellationToken cancellationToken);
         IReadOnlyDictionary<uint, (VirtualNode Node, IChildNodeInMemoryCache Cache)> NodeToCacheMapping { get; }
         Task AddNodeAsync([FromBody] VirtualNode node, CancellationToken cancellationToken);
         Task RemoveNodeAsync([FromRoute] uint position, CancellationToken cancellationToken);

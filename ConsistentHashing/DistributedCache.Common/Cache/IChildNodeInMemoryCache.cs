@@ -2,6 +2,7 @@
 {
     public interface IChildNodeInMemoryCache
     {
+        Dictionary<uint, string> Cache { get; }
         bool AddToCache(uint keyHash, string value);
         void AddBulkToCache(Dictionary<uint, string> cacheItems);
         void RemoveFromCache(uint keyHash);

@@ -14,6 +14,8 @@
             _hashingRing = hashingRing;
         }
 
+        public Dictionary<PhysicalNode, Dictionary<uint, VirtualNode>> PhysicalToVirtualMapping => _physicalToVirtualMapping;
+
         public VirtualNode GetVirtualNodeForHash(uint keyPosition)
         {
             return _hashingRing.GetVirtualNodeForHash(keyPosition);

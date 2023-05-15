@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DistributedCache.LoadBalancer.Controllers
 {
-    //TODO decouple hashing ring to node manager.
     [ApiController]
     [Route("load-balancer")]
     public class LoadBalancerController : ControllerBase
@@ -13,6 +12,14 @@ namespace DistributedCache.LoadBalancer.Controllers
         public LoadBalancerController(ILoadBalancerService loadBalancerService)
         {
             _loadBalancerService = loadBalancerService;
+        }
+
+        [HttpGet("values")]
+        public async Task<IActionResult> GetLoadBalancerInformationAsync(CancellationToken cancellationToken)
+        {
+            var model = await _loadBalancerService.GetLoadBalancerInformationAsync(cancellationToken);
+
+            return Ok(model);
         }
 
         [HttpPost("node")]

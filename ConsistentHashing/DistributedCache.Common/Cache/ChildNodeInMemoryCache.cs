@@ -6,6 +6,8 @@ namespace DistributedCache.Common
     {
         private readonly int _maxNodeItemsCount;
 
+        public Dictionary<uint, string> Cache => _cache;
+
         private readonly Dictionary<uint, string> _cache = new Dictionary<uint, string>();
         private readonly SortedList<uint, uint> _sortedCacheHashes = new SortedList<uint, uint>();
 

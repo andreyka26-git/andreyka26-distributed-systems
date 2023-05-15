@@ -1,3 +1,4 @@
+using DistributedCache.Common.InformationModels;
 using DistributedCache.Common.NodeManagement;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,6 +13,14 @@ namespace DistributedCache.Master.Controllers
         public MasterController(IMasterService masterService)
         {
             _masterService = masterService;
+        }
+
+        [HttpGet("values")]
+        public async Task<IActionResult> GetClusterInfoAsync(CancellationToken cancellationToken)
+        {
+            var clusterInformation = await _masterService.GetClusterInformationAsync(cancellationToken);
+
+            return Ok(clusterInformation);
         }
 
         [HttpGet("create-new")]

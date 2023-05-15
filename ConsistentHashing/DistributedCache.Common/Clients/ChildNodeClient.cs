@@ -1,4 +1,7 @@
-﻿using DistributedCache.Common.NodeManagement;
+﻿using DistributedCache.Common.InformationModels;
+using DistributedCache.Common.NodeManagement;
+using System.Reflection.Metadata.Ecma335;
+using System.Threading;
 
 namespace DistributedCache.Common.Clients
 {
@@ -9,6 +12,14 @@ namespace DistributedCache.Common.Clients
         public ChildNodeClient(ICustomHttpClient httpClient)
         {
             _httpClient = httpClient;
+        }
+
+        public async Task<ChildInformationModel> GetChildClusterInformationModelAsync(PhysicalNode physicalNode, CancellationToken cancellationToken)
+        {
+            var url = $"{physicalNode.Location}child-node/values";
+            var model = await _httpClient.GetAsync<ChildInformationModel>(new Uri(url), cancellationToken);
+
+            return model;
         }
 
         public async Task AddFirstHalfToNewNodeAsync(Dictionary<uint, string> cacheItems, VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)

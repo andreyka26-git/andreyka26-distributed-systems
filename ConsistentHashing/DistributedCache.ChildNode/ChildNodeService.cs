@@ -1,6 +1,7 @@
 ﻿using DistributedCache.Common.NodeManagement;
 using DistributedCache.Common;
 using DistributedCache.Common.Cache;
+using DistributedCache.Common.InformationModels;
 
 namespace DistributedCache.ChildNode
 {
@@ -17,6 +18,18 @@ namespace DistributedCache.ChildNode
             IRebalancingQueue rebalancingQueue)
         {
             _rebalancingQueue = rebalancingQueue;
+        }
+
+        public Task<ChildInformationModel> GetChildClusterInformationModelAsync(CancellationToken cancellationToken)
+        {
+            var model = new ChildInformationModel();
+
+            foreach (var (keyHash, (node, cache)) in _nodeToCacheMapping)
+            {
+                model.VirtualNodesWithItems.Add((node, cache.Cache));
+            }
+
+            return Task.FromResult(model);
         }
 
         public Task AddNodeAsync(VirtualNode node, CancellationToken cancellationToken)

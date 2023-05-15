@@ -14,6 +14,13 @@ namespace DistributedCache.ChildNode.Controllers
             _childNodeService = childNodeService;
         }
 
+        [HttpGet("values")]
+        public async Task<IActionResult> GetAllInformationAsync(CancellationToken cancellationToken)
+        {
+            var model = await _childNodeService.GetChildClusterInformationModelAsync(cancellationToken);
+            return Ok(model);
+        }
+
         [HttpPost("nodes")]
         public async Task<IActionResult> AddNodeAsync([FromBody] VirtualNode node, CancellationToken cancellationToken)
         {

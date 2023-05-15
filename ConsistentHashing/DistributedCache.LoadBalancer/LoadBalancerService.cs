@@ -2,6 +2,7 @@
 using DistributedCache.Common.Hashing;
 using DistributedCache.Common.NodeManagement;
 using DistributedCache.Common;
+using DistributedCache.Common.InformationModels;
 
 namespace DistributedCache.LoadBalancer
 {
@@ -19,6 +20,19 @@ namespace DistributedCache.LoadBalancer
             _nodeManager = nodeManager;
             _hashService = hashService;
             _childNodeClient = childNodeClient;
+        }
+
+        public async Task<LoadBalancerInformationModel> GetLoadBalancerInformationAsync(CancellationToken cancellationToken)
+        {
+            var model = new LoadBalancerInformationModel();
+
+            foreach (var (node, virtualNodes) in _nodeManager.PhysicalToVirtualMapping)
+            {
+                var childModel = await _childNodeClient.GetChildClusterInformationModelAsync(node, cancellationToken);
+                model.ChildInformationModels.Add(node, childModel);
+            }
+
+            return model;
         }
 
         public Task AddVirtualNodeAsync(string physicalNodeUrl, VirtualNode virtualNode, CancellationToken cancellationToken)

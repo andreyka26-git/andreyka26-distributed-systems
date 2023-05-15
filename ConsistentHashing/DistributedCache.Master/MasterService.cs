@@ -1,5 +1,6 @@
 ﻿using DistributedCache.Common.Clients;
 using DistributedCache.Common.Hashing;
+using DistributedCache.Common.InformationModels;
 using DistributedCache.Common.NodeManagement;
 
 namespace DistributedCache.Master
@@ -26,6 +27,19 @@ namespace DistributedCache.Master
             _physicalNodeProvider = physicalNodeProvider;
             _loadBalancerClient = loadBalancerClient;
             _hashService = hashService;
+        }
+
+        public async Task<ClusterInformationModel> GetClusterInformationAsync(CancellationToken cancellationToken)
+        {
+            var clusterInformation = new ClusterInformationModel();
+
+            foreach(var loadBalancer in _physicalNodeProvider.LoadBalancers)
+            {
+                var loadBalancerInformationModel = await _loadBalancerClient.GetLoadBalancerInformationModelAsync(loadBalancer, cancellationToken);
+                clusterInformation.LoadBalancerInformations.Add(loadBalancer, loadBalancerInformationModel);
+            }
+
+            return clusterInformation;
         }
 
         public async Task<PhysicalNode> CreateLoadBalancerAsync(int port, CancellationToken cancellationToken)

@@ -2,6 +2,7 @@
 {
     public interface IChildNodeManager
     {
+        Dictionary<PhysicalNode, Dictionary<uint, VirtualNode>> PhysicalToVirtualMapping { get; }
         VirtualNode GetVirtualNodeForHash(uint keyPosition);
         PhysicalNode ResolvePhysicalNode(VirtualNode virtualNode);
         void AddPhysicalNode(PhysicalNode physicalNode);
