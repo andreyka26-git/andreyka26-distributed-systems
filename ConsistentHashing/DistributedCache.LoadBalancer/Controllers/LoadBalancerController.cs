@@ -15,14 +15,14 @@ namespace DistributedCache.LoadBalancer.Controllers
             _loadBalancerService = loadBalancerService;
         }
 
-        [HttpPost("node/{physicalNodeUrl}")]
-        public async Task AddVirtualNodeAsync([FromRoute] string physicalNodeUrl, [FromBody] VirtualNode virtualNode, CancellationToken cancellationToken)
+        [HttpPost("node")]
+        public async Task AddVirtualNodeAsync([FromQuery] string physicalNodeUrl, [FromBody] VirtualNode virtualNode, CancellationToken cancellationToken)
         {
             await _loadBalancerService.AddVirtualNodeAsync(physicalNodeUrl, virtualNode, cancellationToken);
         }
 
-        [HttpDelete("node/{physicalNodeUrl}")]
-        public async Task RemoveVirtualNodeAsync([FromRoute] string physicalNodeUrl, [FromBody] VirtualNode virtualNode, CancellationToken cancellationToken)
+        [HttpDelete("node")]
+        public async Task RemoveVirtualNodeAsync([FromQuery] string physicalNodeUrl, [FromBody] VirtualNode virtualNode, CancellationToken cancellationToken)
         {
             await _loadBalancerService.RemoveVirtualNodeAsync(physicalNodeUrl, virtualNode, cancellationToken);
         }

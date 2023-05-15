@@ -1,4 +1,5 @@
 ﻿using DistributedCache.Common.NodeManagement;
+using System.Net;
 
 namespace DistributedCache.Common.Clients
 {
@@ -18,7 +19,7 @@ namespace DistributedCache.Common.Clients
             PhysicalNode physicalNode,
             CancellationToken cancellationToken)
         {
-            var url = $"{loadBalancerPhysicalNode.Location}load-balancer/node/{physicalNode.Location}";
+            var url = $"{loadBalancerPhysicalNode.Location}load-balancer/node?physicalNodeUrl={WebUtility.UrlEncode(physicalNode.Location.ToString())}";
             await _httpClient.PostAsync(new Uri(url), newVirtualNode, cancellationToken);
         }
 
@@ -28,7 +29,7 @@ namespace DistributedCache.Common.Clients
             PhysicalNode physicalNode,
             CancellationToken cancellationToken)
         {
-            var url = $"{loadBalancerPhysicalNode.Location}load-balancer/node/{physicalNode.Location}";
+            var url = $"{loadBalancerPhysicalNode.Location}load-balancer/node?physicalNodeUrl={WebUtility.UrlEncode(physicalNode.Location.ToString())}";
             await _httpClient.DeleteAsync(new Uri(url), virtualNode, cancellationToken);
         }
     }

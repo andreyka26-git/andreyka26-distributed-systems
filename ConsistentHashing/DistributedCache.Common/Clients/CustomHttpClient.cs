@@ -37,11 +37,15 @@ namespace DistributedCache.Common.Clients
         {
             using (var request = new HttpRequestMessage(HttpMethod.Post, url))
             {
+                var reqJson = _serializer.SerializeToJson(req);
+                request.Content = new StringContent(reqJson, Encoding.UTF8, MediaTypeNames.Application.Json);
+
                 var response = await _httpClient.SendAsync(request, cancellationToken);
+                var content = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    throw new Exception($"Error while sending request to {url}");
+                    throw new Exception($"Error while sending request to {url}, {content}");
                 }
             }
         }

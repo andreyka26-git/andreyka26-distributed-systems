@@ -8,18 +8,16 @@ namespace DistributedCache.Master.Controllers
     public class MasterController : ControllerBase
     {
         private readonly IMasterService _masterService;
-        private readonly IPhysicalNodeProvider _physicalNodeProvider;
 
-        public MasterController(IMasterService masterService, IPhysicalNodeProvider physicalNodeProvider)
+        public MasterController(IMasterService masterService)
         {
             _masterService = masterService;
-            _physicalNodeProvider = physicalNodeProvider;
         }
 
         [HttpGet("create-new")]
         public async Task<IActionResult> CreateNewNodeAsync([FromQuery] int port, CancellationToken cancellationToken)
         {
-            var node = await _physicalNodeProvider.CreateChildPhysicalNodeAsync(port, cancellationToken);
+            var node = await _masterService.CreateNewChildNodeAsync(port, cancellationToken);
             return Ok(node.Location);
         }
 

@@ -28,12 +28,13 @@ namespace DistributedCache.Master
             _hashService = hashService;
         }
 
-        public async Task CreateLoadBalancerAsync(int port, CancellationToken cancellationToken)
+        public async Task<PhysicalNode> CreateLoadBalancerAsync(int port, CancellationToken cancellationToken)
         {
-            await _physicalNodeProvider.CreateLoadBalancerPhysicalNodeAsync(port, cancellationToken);
+            var node = await _physicalNodeProvider.CreateLoadBalancerPhysicalNodeAsync(port, cancellationToken);
+            return node;
         }
 
-        public async Task CreateNewChildNodeAsync(int port, CancellationToken cancellationToken)
+        public async Task<PhysicalNode> CreateNewChildNodeAsync(int port, CancellationToken cancellationToken)
         {
             var childNode = await _physicalNodeProvider.CreateChildPhysicalNodeAsync(port, cancellationToken);
             var virtualNode = new VirtualNode(_hashService.GetHash(childNode.Location.ToString()), MaxChildNodeItems);
@@ -47,6 +48,8 @@ namespace DistributedCache.Master
             {
                 await _loadBalancerClient.AddVirtualNodeAsync(loadBalancer, virtualNode, childNode, cancellationToken);
             }
+
+            return childNode;
         }
 
         public async Task RebalanceNodeAsync(VirtualNode hotVirtualNode, CancellationToken cancellationToken)

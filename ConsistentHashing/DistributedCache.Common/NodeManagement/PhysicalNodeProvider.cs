@@ -50,7 +50,7 @@ namespace DistributedCache.Common.NodeManagement
             }
             else
             {
-                if (port > _currentAvailablePort)
+                if (_currentAvailablePort > port)
                 {
                     throw new ArgumentException($"Port should be monotonically increasing, set something above {_currentAvailablePort}");
                 }
