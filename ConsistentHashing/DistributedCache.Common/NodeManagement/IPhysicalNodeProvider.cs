@@ -2,6 +2,6 @@
 {
     public interface IPhysicalNodeProvider
     {
-        Task<PhysicalNode> CreateNewPhysicalNodeAsync();
+        Task<PhysicalNode> CreateNewPhysicalNodeAsync(CancellationToken cancellationToken);
     }
 }

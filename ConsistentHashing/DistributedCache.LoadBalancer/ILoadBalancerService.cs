@@ -7,6 +7,6 @@ namespace DistributedCache.LoadBalancer
         Task AddVirtualNodeAsync(string physicalNodeUrl, VirtualNode virtualNode, CancellationToken cancellationToken);
         Task RemoveVirtualNodeAsync(string physicalNodeUrl, VirtualNode virtualNode, CancellationToken cancellationToken);
         Task<string> GetValueAsync(string key, CancellationToken cancellationToken);
-        Task AddValueAsync(string key, string value, CancellationToken cancellationToken)
+        Task AddValueAsync(string key, string value, CancellationToken cancellationToken);
     }
 }

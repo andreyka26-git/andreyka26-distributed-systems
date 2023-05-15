@@ -16,7 +16,7 @@ builder.Services.AddSingleton<IChildNodeClient, ChildNodeClient>();
 builder.Services.AddSingleton<INodeManager, NodeManager>();
 //builder.Services.AddSingleton<IPhysicalNodeProvider, PhysicalNodeProvider>();
 builder.Services.AddSingleton<ILoadBalancerNodeClient, LoadBalancerNodeClient>();
-builder.Services.Configure<LoadBalancerOptions>(builder.Configuration.GetSection(nameof(LoadBalancerOptions));
+builder.Services.Configure<LoadBalancerOptions>(builder.Configuration.GetSection(nameof(LoadBalancerOptions)));
 
 var app = builder.Build();
 

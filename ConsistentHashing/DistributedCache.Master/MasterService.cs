@@ -34,7 +34,7 @@ namespace DistributedCache.Master
         {
             var hotPhysicalNode = _nodeManager.ResolvePhysicalNode(hotVirtualNode);
 
-            var newPhysicalNode = _physicalNodeProvider.CreateNewPhysicalNodeAsync();
+            var newPhysicalNode = await _physicalNodeProvider.CreateNewPhysicalNodeAsync(cancellationToken);
             var firstHalf = await _childClient.GetFirstHalfOfCacheAsync(hotVirtualNode, hotPhysicalNode, cancellationToken);
 
             var nodePosition = firstHalf.Last().Key;
