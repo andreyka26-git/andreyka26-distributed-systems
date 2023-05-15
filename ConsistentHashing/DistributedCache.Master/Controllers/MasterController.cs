@@ -17,10 +17,10 @@ namespace DistributedCache.Master.Controllers
         }
 
         [HttpGet("create-new")]
-        public async Task<IActionResult> CreateNewNodeAsync(CancellationToken cancellationToken)
+        public async Task<IActionResult> CreateNewNodeAsync([FromQuery] int port, CancellationToken cancellationToken)
         {
-            await _physicalNodeProvider.CreateNewPhysicalNodeAsync(cancellationToken);
-            return Ok();
+            var node = await _physicalNodeProvider.CreateChildPhysicalNodeAsync(port, cancellationToken);
+            return Ok(node.Location);
         }
 
         [HttpPost("rebalance")]

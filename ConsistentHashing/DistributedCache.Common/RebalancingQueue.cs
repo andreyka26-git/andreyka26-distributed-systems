@@ -14,7 +14,7 @@ namespace DistributedCache.Common
             ICustomHttpClient httpClient)
         {
             _httpClient = httpClient;
-            _masterUrl = configuration.GetValue<string?>("MasterUrl");
+            _masterUrl = c
 
             if (string.IsNullOrEmpty(_masterUrl))
             {

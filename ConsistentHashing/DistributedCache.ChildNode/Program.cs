@@ -1,6 +1,7 @@
 using DistributedCache.ChildNode;
 using DistributedCache.Common;
 using DistributedCache.Common.Clients;
+using DistributedCache.Common.Serializers;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,7 +14,11 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddSingleton<IChildNodeService, ChildNodeService>();
+
+builder.Services.AddHttpClient();
 builder.Services.AddSingleton<ICustomHttpClient, CustomHttpClient>();
+
+builder.Services.AddSingleton<IBinarySerializer, NewtonsoftSerializer>();
 builder.Services.AddSingleton<IRebalancingQueue, RebalancingQueue>();
 
 var app = builder.Build();

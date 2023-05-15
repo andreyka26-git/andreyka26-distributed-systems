@@ -18,7 +18,7 @@ namespace DistributedCache.Common.Clients
             PhysicalNode physicalNode,
             CancellationToken cancellationToken)
         {
-            var url = $"{loadBalancerPhysicalNode.Location}/load-balancer/node/{physicalNode.Location}";
+            var url = $"{loadBalancerPhysicalNode.Location}load-balancer/node/{physicalNode.Location}";
             await _httpClient.PostAsync(new Uri(url), newVirtualNode, cancellationToken);
         }
 
@@ -28,7 +28,7 @@ namespace DistributedCache.Common.Clients
             PhysicalNode physicalNode,
             CancellationToken cancellationToken)
         {
-            var url = $"{loadBalancerPhysicalNode.Location}/load-balancer/node/{physicalNode.Location}";
+            var url = $"{loadBalancerPhysicalNode.Location}load-balancer/node/{physicalNode.Location}";
             await _httpClient.DeleteAsync(new Uri(url), virtualNode, cancellationToken);
         }
     }

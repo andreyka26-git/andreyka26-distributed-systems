@@ -1,6 +1,6 @@
 ﻿namespace DistributedCache.Common.NodeManagement
 {
-    public interface INodeManager
+    public interface IChildNodeManager
     {
         VirtualNode GetVirtualNodeForHash(uint keyPosition);
         PhysicalNode ResolvePhysicalNode(VirtualNode virtualNode);

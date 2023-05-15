@@ -1,32 +1,51 @@
 ﻿using DistributedCache.Common.Clients;
+using DistributedCache.Common.Hashing;
 using DistributedCache.Common.NodeManagement;
-using Microsoft.Extensions.Options;
 
 namespace DistributedCache.Master
 {
     public class MasterService : IMasterService
     {
+        private const int MaxChildNodeItems = 5;
+
         private readonly IChildNodeClient _childClient;
-        private readonly INodeManager _nodeManager;
+        private readonly IChildNodeManager _nodeManager;
         private readonly IPhysicalNodeProvider _physicalNodeProvider;
         private readonly ILoadBalancerNodeClient _loadBalancerClient;
-        private readonly List<PhysicalNode> _loadBalancerNodes = new List<PhysicalNode>();
+        private readonly IHashService _hashService;
 
         public MasterService(
             IChildNodeClient childClient,
-            INodeManager nodeManager,
+            IChildNodeManager nodeManager,
             IPhysicalNodeProvider physicalNodeProvider,
             ILoadBalancerNodeClient loadBalancerClient,
-            IOptions<LoadBalancerOptions> options)
+            IHashService hashService)
         {
             _childClient = childClient;
             _nodeManager = nodeManager;
             _physicalNodeProvider = physicalNodeProvider;
             _loadBalancerClient = loadBalancerClient;
+            _hashService = hashService;
+        }
 
-            foreach (var loadBalancer in options.Value.LoadBalancerUrls)
+        public async Task CreateLoadBalancerAsync(int port, CancellationToken cancellationToken)
+        {
+            await _physicalNodeProvider.CreateLoadBalancerPhysicalNodeAsync(port, cancellationToken);
+        }
+
+        public async Task CreateNewChildNodeAsync(int port, CancellationToken cancellationToken)
+        {
+            var childNode = await _physicalNodeProvider.CreateChildPhysicalNodeAsync(port, cancellationToken);
+            var virtualNode = new VirtualNode(_hashService.GetHash(childNode.Location.ToString()), MaxChildNodeItems);
+
+            _nodeManager.AddPhysicalNode(childNode);
+            _nodeManager.AddVirtualNode(virtualNode, childNode);
+
+            await _childClient.AddNewVirtualNodeAsync(childNode, virtualNode, cancellationToken);
+
+            foreach(var loadBalancer in _physicalNodeProvider.LoadBalancers)
             {
-                var loadBalancerNode = new PhysicalNode(new Uri(loadBalancer));
+                await _loadBalancerClient.AddVirtualNodeAsync(loadBalancer, virtualNode, childNode, cancellationToken);
             }
         }
 
@@ -34,13 +53,13 @@ namespace DistributedCache.Master
         {
             var hotPhysicalNode = _nodeManager.ResolvePhysicalNode(hotVirtualNode);
 
-            var newPhysicalNode = await _physicalNodeProvider.CreateNewPhysicalNodeAsync(cancellationToken);
+            var newPhysicalNode = await _physicalNodeProvider.CreateChildPhysicalNodeAsync(cancellationToken: cancellationToken);
             var firstHalf = await _childClient.GetFirstHalfOfCacheAsync(hotVirtualNode, hotPhysicalNode, cancellationToken);
 
             var nodePosition = firstHalf.Last().Key;
             var newVirtualNode = new VirtualNode(nodePosition, hotVirtualNode.MaxItemsCount);
 
-            foreach (var loadBalancerNode in _loadBalancerNodes)
+            foreach (var loadBalancerNode in _physicalNodeProvider.LoadBalancers)
             {
                 await _loadBalancerClient.AddVirtualNodeAsync(loadBalancerNode, newVirtualNode, newPhysicalNode, cancellationToken);
             }

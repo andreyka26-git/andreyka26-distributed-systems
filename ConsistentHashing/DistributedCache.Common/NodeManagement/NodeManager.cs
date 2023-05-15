@@ -1,6 +1,6 @@
 ﻿namespace DistributedCache.Common.NodeManagement
 {
-    public class NodeManager : INodeManager
+    public class ChildNodeManager : IChildNodeManager
     {
         private readonly Dictionary<VirtualNode, PhysicalNode> _virtualToPhysicalMapping = new Dictionary<VirtualNode, PhysicalNode>();
 
@@ -9,7 +9,7 @@
 
         private readonly IHashingRing _hashingRing;
 
-        public NodeManager(IHashingRing hashingRing)
+        public ChildNodeManager(IHashingRing hashingRing)
         {
             _hashingRing = hashingRing;
         }

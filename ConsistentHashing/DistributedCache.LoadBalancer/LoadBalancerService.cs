@@ -7,12 +7,12 @@ namespace DistributedCache.LoadBalancer
 {
     public class LoadBalancerService : ILoadBalancerService
     {
-        private readonly INodeManager _nodeManager;
+        private readonly IChildNodeManager _nodeManager;
         private readonly IHashService _hashService;
         private readonly IChildNodeClient _childNodeClient;
 
         public LoadBalancerService(
-            INodeManager nodeManager,
+            IChildNodeManager nodeManager,
             IHashService hashService,
             IChildNodeClient childNodeClient)
         {

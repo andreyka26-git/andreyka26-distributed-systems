@@ -2,6 +2,7 @@ using DistributedCache.Common;
 using DistributedCache.Common.Clients;
 using DistributedCache.Common.Hashing;
 using DistributedCache.Common.NodeManagement;
+using DistributedCache.Common.Serializers;
 using DistributedCache.LoadBalancer;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,10 +15,14 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddSingleton<ILoadBalancerService, LoadBalancerService>();
-builder.Services.AddSingleton<IHashingRing, HashingRing>();
-builder.Services.AddSingleton<INodeManager, NodeManager>();
-builder.Services.AddSingleton<IHashService, JenkinsHashService>();
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<ICustomHttpClient, CustomHttpClient>();
 builder.Services.AddSingleton<IChildNodeClient, ChildNodeClient>();
+
+builder.Services.AddSingleton<IHashingRing, HashingRing>();
+builder.Services.AddSingleton<IChildNodeManager, ChildNodeManager>();
+builder.Services.AddSingleton<IHashService, JenkinsHashService>();
+builder.Services.AddSingleton<IBinarySerializer, NewtonsoftSerializer>();
 
 var app = builder.Build();
 

@@ -1,6 +1,10 @@
+using DistributedCache.Common;
 using DistributedCache.Common.Clients;
+using DistributedCache.Common.Hashing;
 using DistributedCache.Common.NodeManagement;
+using DistributedCache.Common.Serializers;
 using DistributedCache.Master;
+using System.Xml.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,10 +17,16 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddSingleton<IMasterService, MasterService>();
 builder.Services.AddSingleton<IChildNodeClient, ChildNodeClient>();
-builder.Services.AddSingleton<INodeManager, NodeManager>();
-//builder.Services.AddSingleton<IPhysicalNodeProvider, PhysicalNodeProvider>();
 builder.Services.AddSingleton<ILoadBalancerNodeClient, LoadBalancerNodeClient>();
-builder.Services.Configure<LoadBalancerOptions>(builder.Configuration.GetSection(nameof(LoadBalancerOptions)));
+
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<ICustomHttpClient, CustomHttpClient>();
+
+builder.Services.AddSingleton<IChildNodeManager, ChildNodeManager>();
+builder.Services.AddSingleton<IPhysicalNodeProvider, PhysicalNodeProvider>();
+builder.Services.AddSingleton<IBinarySerializer, NewtonsoftSerializer>();
+builder.Services.AddSingleton<IHashingRing, HashingRing>();
+builder.Services.AddSingleton<IHashService, JenkinsHashService>();
 
 var app = builder.Build();
 
@@ -27,6 +37,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+InitializeMasterAsync().GetAwaiter().GetResult();
+
 app.UseHttpsRedirection();
 
 app.UseAuthorization();
@@ -34,3 +46,18 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+async Task InitializeMasterAsync()
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var masterService = scope.ServiceProvider.GetRequiredService<IMasterService>();
+
+        // order matters
+        await masterService.CreateLoadBalancerAsync(7005, CancellationToken.None);
+        await masterService.CreateLoadBalancerAsync(7006, CancellationToken.None);
+
+        await masterService.CreateNewChildNodeAsync(7007, CancellationToken.None);
+        await masterService.CreateNewChildNodeAsync(7008, CancellationToken.None);
+    }
+}
