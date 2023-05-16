@@ -14,7 +14,7 @@ namespace DistributedCache.ChildNode
         Task<bool> AddValueAsync(uint nodePosition, uint KeyHash, string value, CancellationToken cancellationToken);
         Task<Dictionary<uint, string>> GetFirstHalfOfCacheAsync(uint nodePosition, CancellationToken cancellationToken);
 
-        Task RemoveFirstHalfOfCacheAsync(uint nodePosition, CancellationToken cancellationToken);
+        Task RemoveFirstHalfOfCacheAsync(uint nodePosition, uint lastKeyHashInclusively, CancellationToken cancellationToken);
         Task AddBulkToCacheAsync(uint nodePosition, Dictionary<uint, string> cacheItems, CancellationToken cancellationToken);
         Task<int> GetCountAsync(uint nodePosition, CancellationToken cancellationToken);
     }

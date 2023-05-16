@@ -66,7 +66,7 @@ namespace DistributedCache.Common.Clients
 
         public async Task RemoveFirstHalfOfCache(uint lastKeyHashInclusively, VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
         {
-            var url = $"{physicalNode.Location}child-node/{virtualNode.RingPosition}/firstHalf";
+            var url = $"{physicalNode.Location}child-node/{virtualNode.RingPosition}/firstHalf?lastKeyHashInclusively={lastKeyHashInclusively}";
             await _httpClient.DeleteAsync(new Uri(url), cancellationToken);
         }
 
