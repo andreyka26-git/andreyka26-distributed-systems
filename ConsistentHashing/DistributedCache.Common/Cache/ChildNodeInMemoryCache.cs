@@ -65,12 +65,12 @@ namespace DistributedCache.Common
 
         public void RemoveFirstHalfOfCache(uint lastKeyHashInclusively)
         {
-            var hashKeysToRemove = _sortedCacheHashes.Where(k => k.Key <= lastKeyHashInclusively).ToList();
+            var keyHashesToRemove = _sortedCacheHashes.Where(k => k.Key <= lastKeyHashInclusively).ToList();
 
-            foreach(var hashKeyToRemove in hashKeysToRemove)
+            foreach(var keyHashToRemove in keyHashesToRemove)
             {
-                _sortedCacheHashes.Remove(hashKeyToRemove.Key);
-                _cache.Remove(hashKeyToRemove.Key);
+                _sortedCacheHashes.Remove(keyHashToRemove.Key);
+                _cache.Remove(keyHashToRemove.Key);
             }
         }
 

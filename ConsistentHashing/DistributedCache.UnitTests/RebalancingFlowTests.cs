@@ -16,6 +16,7 @@ namespace DistributedCache.UnitTests
 
         private LoadBalancerClientFake _loadBalancerClientFake;
         private ChildClientFake _childClientFake;
+        private JenkinsHashService _hashService;
 
         [SetUp]
         public async Task SetUp()
@@ -24,8 +25,8 @@ namespace DistributedCache.UnitTests
             _loadBalancerClientFake = new LoadBalancerClientFake();
 
             var serializer = new NewtonsoftSerializer();
-            var hashService = new JenkinsHashService(serializer);
-            var hashingRing = new HashingRing(hashService);
+            _hashService = new JenkinsHashService(serializer);
+            var hashingRing = new HashingRing(_hashService);
 
             var childNodeManager = new ChildNodeManager(hashingRing);
             _physicalNodeProviderFake = new PhysicalNodeProviderFake();
@@ -35,7 +36,7 @@ namespace DistributedCache.UnitTests
                 childNodeManager,
                 _physicalNodeProviderFake,
                 _loadBalancerClientFake,
-                hashService);
+                _hashService);
 
             _physicalNodeProviderFake.ChildCreated += (obj, node) =>
             {
@@ -64,18 +65,30 @@ namespace DistributedCache.UnitTests
             await _masterService.CreateNewChildNodeAsync(1001, CancellationToken.None);
 
             var firstLoadBalancer = _physicalNodeProviderFake.LoadBalancers[0];
-            await _loadBalancerClientFake.LoadBalancerToServiceMapping[firstLoadBalancer].AddValueAsync("key1", "key2", CancellationToken.None);
+            await _loadBalancerClientFake.LoadBalancerToServiceMapping[firstLoadBalancer].AddValueAsync("key1", "key1", CancellationToken.None);
+            await _loadBalancerClientFake.LoadBalancerToServiceMapping[firstLoadBalancer].AddValueAsync("key2", "key2", CancellationToken.None);
+            await _loadBalancerClientFake.LoadBalancerToServiceMapping[firstLoadBalancer].AddValueAsync("key3", "key3", CancellationToken.None);
+            await _loadBalancerClientFake.LoadBalancerToServiceMapping[firstLoadBalancer].AddValueAsync("key4", "key4", CancellationToken.None);
+
+            var firstChildPhysicalNode = _physicalNodeProviderFake.ChildNodes[0];
+            var firstChildService = _childClientFake.ChildNodeToServiceMapping[firstChildPhysicalNode];
+            var (node, cache) = firstChildService.NodeToCacheMapping.Single().Value;
+
+            Assert.That(cache.Cache[_hashService.GetHash("key1")], Is.EqualTo("key1"));
+            Assert.That(cache.Cache[_hashService.GetHash("key2")], Is.EqualTo("key2"));
+            Assert.That(cache.Cache[_hashService.GetHash("key3")], Is.EqualTo("key3"));
+            Assert.That(cache.Cache[_hashService.GetHash("key4")], Is.EqualTo("key4"));
+            Assert.That(cache.Cache.Count, Is.EqualTo(4));
         }
 
         private LoadBalancerService GetLoadBalancerService(ChildClientFake childClient)
         {
             var serializer = new NewtonsoftSerializer();
-            var hashService = new JenkinsHashService(serializer);
-            var hashingRing = new HashingRing(hashService);
+            var hashingRing = new HashingRing(_hashService);
 
             var childNodeManager = new ChildNodeManager(hashingRing);
 
-            var loadBalancer = new LoadBalancerService(childNodeManager, hashService, childClient);
+            var loadBalancer = new LoadBalancerService(childNodeManager, _hashService, childClient);
 
             return loadBalancer;
         }

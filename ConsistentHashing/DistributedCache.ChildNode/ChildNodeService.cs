@@ -44,20 +44,20 @@ namespace DistributedCache.ChildNode
             return Task.CompletedTask;
         }
 
-        public Task<string> GetValueAsync(uint nodePosition, uint hashKey, CancellationToken cancellationToken)
+        public Task<string> GetValueAsync(uint nodePosition, uint keyHash, CancellationToken cancellationToken)
         {
-            var value = _nodeToCacheMapping[nodePosition].Cache.GetFromCache(hashKey);
+            var value = _nodeToCacheMapping[nodePosition].Cache.GetFromCache(keyHash);
             return Task.FromResult(value);
         }
 
-        public async Task<bool> AddValueAsync(uint nodePosition, uint hashKey, string value, CancellationToken cancellationToken)
+        public async Task<bool> AddValueAsync(uint nodePosition, uint keyHash, string value, CancellationToken cancellationToken)
         {
             if (!_nodeToCacheMapping.ContainsKey(nodePosition))
             {
                 throw new Exception($"there is no node for {nodePosition}, please add virtual node");
             }
 
-            var doesNeedRebalancing = _nodeToCacheMapping[nodePosition].Cache.AddToCache(hashKey, value);
+            var doesNeedRebalancing = _nodeToCacheMapping[nodePosition].Cache.AddToCache(keyHash, value);
 
             if (doesNeedRebalancing)
             {

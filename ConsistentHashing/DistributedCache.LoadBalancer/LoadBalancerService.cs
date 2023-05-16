@@ -52,24 +52,24 @@ namespace DistributedCache.LoadBalancer
             return Task.CompletedTask;
         }
 
-        public async Task<string> GetValueAsync( string key, CancellationToken cancellationToken)
+        public async Task<string> GetValueAsync(string key, CancellationToken cancellationToken)
         {
-            var hashKey = _hashService.GetHash(key);
+            var keyHash = _hashService.GetHash(key);
 
-            var virtualNode = _nodeManager.GetVirtualNodeForHash(hashKey);
+            var virtualNode = _nodeManager.GetVirtualNodeForHash(keyHash);
             var physicalNode = _nodeManager.ResolvePhysicalNode(virtualNode);
 
-            var value = await _childNodeClient.GetFromCacheAsync(hashKey, virtualNode, physicalNode, cancellationToken);
+            var value = await _childNodeClient.GetFromCacheAsync(keyHash, virtualNode, physicalNode, cancellationToken);
             return value;
         }
 
         public async Task AddValueAsync(string key, string value, CancellationToken cancellationToken)
         {
-            var hashKey = _hashService.GetHash(key);
-            var virtualNode = _nodeManager.GetVirtualNodeForHash(hashKey);
+            var keyHash = _hashService.GetHash(key);
+            var virtualNode = _nodeManager.GetVirtualNodeForHash(keyHash);
             var physicalNode = _nodeManager.ResolvePhysicalNode(virtualNode);
 
-            var addToCacheModel = new AddToCacheModel(virtualNode, hashKey, value);
+            var addToCacheModel = new AddToCacheModel(virtualNode, keyHash, value);
             await _childNodeClient.AddToCacheAsync(addToCacheModel, physicalNode, cancellationToken);
         }
     }

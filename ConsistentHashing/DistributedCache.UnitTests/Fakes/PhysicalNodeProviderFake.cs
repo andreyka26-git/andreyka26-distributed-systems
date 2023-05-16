@@ -8,7 +8,6 @@ namespace DistributedCache.UnitTests.Fakes
         private readonly List<PhysicalNode> _loadBalancers = new List<PhysicalNode>();
         private readonly List<PhysicalNode> _childNodes = new List<PhysicalNode>();
 
-        public Func<(RebalancingQueueFake, ChildNodeService)> CreateChildServiceFunc;
         public EventHandler<PhysicalNode> ChildCreated;
         public EventHandler<PhysicalNode> LoadBalancerCreated;
 

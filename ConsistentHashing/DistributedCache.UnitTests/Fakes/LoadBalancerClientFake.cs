@@ -18,14 +18,15 @@ namespace DistributedCache.UnitTests.Fakes
             await LoadBalancerToServiceMapping[loadBalancerPhysicalNode].AddVirtualNodeAsync(physicalNode.Location.ToString(), newVirtualNode, cancellationToken);
         }
 
-        public Task<LoadBalancerInformationModel> GetLoadBalancerInformationModelAsync(PhysicalNode loadBalancerPhysicalNode, CancellationToken cancellationToken)
+        public async Task<LoadBalancerInformationModel> GetLoadBalancerInformationModelAsync(PhysicalNode loadBalancerPhysicalNode, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            var info = await LoadBalancerToServiceMapping[loadBalancerPhysicalNode].GetLoadBalancerInformationAsync(cancellationToken);
+            return info;
         }
 
-        public Task RemoveVirtualNodeAsync(PhysicalNode loadBalancerPhysicalNode, VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
+        public async Task RemoveVirtualNodeAsync(PhysicalNode loadBalancerPhysicalNode, VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            await LoadBalancerToServiceMapping[loadBalancerPhysicalNode].RemoveVirtualNodeAsync(physicalNode.Location.ToString(), virtualNode, cancellationToken);
         }
     }
 }

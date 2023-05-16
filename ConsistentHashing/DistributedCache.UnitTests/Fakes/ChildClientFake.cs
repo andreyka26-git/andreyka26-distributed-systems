@@ -14,9 +14,9 @@ namespace DistributedCache.UnitTests.Fakes
         {
         }
 
-        public Task AddFirstHalfToNewNodeAsync(Dictionary<uint, string> cacheItems, VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
+        public async Task AddFirstHalfToNewNodeAsync(Dictionary<uint, string> cacheItems, VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            await ChildNodeToServiceMapping[physicalNode].AddBulkToCacheAsync(virtualNode.RingPosition, cacheItems, cancellationToken);
         }   
 
         public async Task AddNewVirtualNodeAsync(PhysicalNode physicalNode, VirtualNode virtualNode, CancellationToken cancellationToken)
@@ -24,39 +24,43 @@ namespace DistributedCache.UnitTests.Fakes
             await ChildNodeToServiceMapping[physicalNode].AddNodeAsync(virtualNode, cancellationToken);
         }
 
-        public Task AddToCacheAsync(AddToCacheModel addModel, PhysicalNode physicalNode, CancellationToken cancellationToken)
+        public async Task AddToCacheAsync(AddToCacheModel addModel, PhysicalNode physicalNode, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            await ChildNodeToServiceMapping[physicalNode].AddValueAsync(addModel.VirtualNode.RingPosition, addModel.KeyHash, addModel.Value, cancellationToken);
         }
 
-        public Task<ChildInformationModel> GetChildClusterInformationModelAsync(PhysicalNode physicalNode, CancellationToken cancellationToken)
+        public async Task<ChildInformationModel> GetChildClusterInformationModelAsync(PhysicalNode physicalNode, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            var info = await ChildNodeToServiceMapping[physicalNode].GetChildClusterInformationModelAsync(cancellationToken);
+            return info;
         }
 
-        public Task<int> GetCountOfItemsAsync(VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
+        public async Task<int> GetCountOfItemsAsync(VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            var count = await ChildNodeToServiceMapping[physicalNode].GetCountAsync(virtualNode.RingPosition, cancellationToken);
+            return count;
         }
 
-        public Task<Dictionary<uint, string>> GetFirstHalfOfCacheAsync(VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
+        public async Task<Dictionary<uint, string>> GetFirstHalfOfCacheAsync(VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            var firstHalf = await ChildNodeToServiceMapping[physicalNode].GetFirstHalfOfCacheAsync(virtualNode.RingPosition, cancellationToken);
+            return firstHalf;
         }
 
-        public Task<string> GetFromCacheAsync(uint keyHash, VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
+        public async Task<string> GetFromCacheAsync(uint keyHash, VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            var value = await ChildNodeToServiceMapping[physicalNode].GetValueAsync(virtualNode.RingPosition, keyHash, cancellationToken);
+            return value;
         }
 
-        public Task RemoveFirstHalfOfCache(uint lastKeyHashInclusively, VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
+        public async Task RemoveFirstHalfOfCache(uint lastKeyHashInclusively, VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            await ChildNodeToServiceMapping[physicalNode].RemoveFirstHalfOfCacheAsync(virtualNode.RingPosition, cancellationToken);
         }
 
-        public Task RemoveVirtualNodeAsync(PhysicalNode physicalNode, VirtualNode virtualNode, CancellationToken cancellationToken)
+        public async Task RemoveVirtualNodeAsync(PhysicalNode physicalNode, VirtualNode virtualNode, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            await ChildNodeToServiceMapping[physicalNode].RemoveNodeAsync(virtualNode.RingPosition, cancellationToken);
         }
     }
 }

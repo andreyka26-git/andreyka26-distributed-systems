@@ -35,17 +35,17 @@ namespace DistributedCache.ChildNode.Controllers
             return Ok();
         }
 
-        [HttpGet("{nodePosition}/{hashKey}")]
-        public async Task<string> GetValueAsync([FromRoute] uint nodePosition, [FromRoute] uint hashKey, CancellationToken cancellationToken)
+        [HttpGet("{nodePosition}/{keyHash}")]
+        public async Task<string> GetValueAsync([FromRoute] uint nodePosition, [FromRoute] uint keyHash, CancellationToken cancellationToken)
         {
-            var value = await _childNodeService.GetValueAsync(nodePosition, hashKey, cancellationToken);
+            var value = await _childNodeService.GetValueAsync(nodePosition, keyHash, cancellationToken);
             return value;
         }
 
-        [HttpPost("{nodePosition}/{hashKey}")]
-        public async Task<IActionResult> AddValueAsync([FromRoute] uint nodePosition, [FromRoute] uint hashKey, [FromBody] string value, CancellationToken cancellationToken)
+        [HttpPost("{nodePosition}/{keyHash}")]
+        public async Task<IActionResult> AddValueAsync([FromRoute] uint nodePosition, [FromRoute] uint keyHash, [FromBody] string value, CancellationToken cancellationToken)
         {
-            var doesNeedRebalancing = await _childNodeService.AddValueAsync(nodePosition, hashKey, value, cancellationToken);
+            var doesNeedRebalancing = await _childNodeService.AddValueAsync(nodePosition, keyHash, value, cancellationToken);
             Response.Headers["Need-Rebalancing"] = doesNeedRebalancing.ToString();
 
             return Ok();

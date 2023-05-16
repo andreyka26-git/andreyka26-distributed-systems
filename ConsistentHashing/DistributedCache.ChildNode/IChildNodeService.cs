@@ -1,7 +1,6 @@
 ﻿using DistributedCache.Common.Cache;
 using DistributedCache.Common.InformationModels;
 using DistributedCache.Common.NodeManagement;
-using Microsoft.AspNetCore.Mvc;
 
 namespace DistributedCache.ChildNode
 {
@@ -9,14 +8,14 @@ namespace DistributedCache.ChildNode
     {
         Task<ChildInformationModel> GetChildClusterInformationModelAsync(CancellationToken cancellationToken);
         IReadOnlyDictionary<uint, (VirtualNode Node, IChildNodeInMemoryCache Cache)> NodeToCacheMapping { get; }
-        Task AddNodeAsync([FromBody] VirtualNode node, CancellationToken cancellationToken);
-        Task RemoveNodeAsync([FromRoute] uint position, CancellationToken cancellationToken);
-        Task<string> GetValueAsync([FromRoute] uint nodePosition, [FromRoute] uint hashKey, CancellationToken cancellationToken);
-        Task<bool> AddValueAsync([FromRoute] uint nodePosition, [FromRoute] uint hashKey, [FromBody] string value, CancellationToken cancellationToken);
-        Task<Dictionary<uint, string>> GetFirstHalfOfCacheAsync([FromRoute] uint nodePosition, CancellationToken cancellationToken);
+        Task AddNodeAsync(VirtualNode node, CancellationToken cancellationToken);
+        Task RemoveNodeAsync(uint position, CancellationToken cancellationToken);
+        Task<string> GetValueAsync(uint nodePosition, uint keyHash, CancellationToken cancellationToken);
+        Task<bool> AddValueAsync(uint nodePosition, uint KeyHash, string value, CancellationToken cancellationToken);
+        Task<Dictionary<uint, string>> GetFirstHalfOfCacheAsync(uint nodePosition, CancellationToken cancellationToken);
 
-        Task RemoveFirstHalfOfCacheAsync([FromRoute] uint nodePosition, CancellationToken cancellationToken);
-        Task AddBulkToCacheAsync([FromRoute] uint nodePosition, [FromBody] Dictionary<uint, string> cacheItems, CancellationToken cancellationToken);
-        Task<int> GetCountAsync([FromRoute] uint nodePosition, CancellationToken cancellationToken);
+        Task RemoveFirstHalfOfCacheAsync(uint nodePosition, CancellationToken cancellationToken);
+        Task AddBulkToCacheAsync(uint nodePosition, Dictionary<uint, string> cacheItems, CancellationToken cancellationToken);
+        Task<int> GetCountAsync(uint nodePosition, CancellationToken cancellationToken);
     }
 }

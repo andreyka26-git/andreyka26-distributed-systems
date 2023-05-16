@@ -9,7 +9,8 @@ namespace DistributedCache.UnitTests.Fakes
 
         public Task EmitNodeRebalancingAsync(VirtualNode hotVirtualNode, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            OnNodeRebalancing(this, hotVirtualNode);
+            return Task.CompletedTask;
         }
     }
 }
