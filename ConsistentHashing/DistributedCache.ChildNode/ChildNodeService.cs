@@ -26,7 +26,7 @@ namespace DistributedCache.ChildNode
 
             foreach (var (keyHash, (node, cache)) in _nodeToCacheMapping)
             {
-                model.VirtualNodesWithItems.Add((node, cache.Cache));
+                model.VirtualNodesWithItems.Add(node, cache.Cache);
             }
 
             return Task.FromResult(model);
@@ -52,6 +52,11 @@ namespace DistributedCache.ChildNode
 
         public async Task<bool> AddValueAsync(uint nodePosition, uint hashKey, string value, CancellationToken cancellationToken)
         {
+            if (!_nodeToCacheMapping.ContainsKey(nodePosition))
+            {
+                throw new Exception($"there is no node for {nodePosition}, please add virtual node");
+            }
+
             var doesNeedRebalancing = _nodeToCacheMapping[nodePosition].Cache.AddToCache(hashKey, value);
 
             if (doesNeedRebalancing)
