@@ -123,7 +123,6 @@ namespace DistributedCache.UnitTests
             Assert.That(cache1.Cache.Count, Is.LessThanOrEqualTo(allCount / 2 + 1));
             Assert.That(cache2.Cache.Count, Is.LessThanOrEqualTo(allCount / 2 + 1));
 
-            //I 'm not moving necessary parts.
             Assert.That(await loadBalancerService.GetValueAsync("key1", _defaultCancellationToken), Is.EqualTo("key1"));
             Assert.That(await loadBalancerService.GetValueAsync("key2", _defaultCancellationToken), Is.EqualTo("key2"));
             Assert.That(await loadBalancerService.GetValueAsync("key3", _defaultCancellationToken), Is.EqualTo("key3"));

@@ -59,9 +59,9 @@ namespace DistributedCache.ChildNode.Controllers
         }
 
         [HttpDelete("{nodePosition}/firstHalf")]
-        public async Task RemoveFirstHalfOfCacheAsync([FromRoute] uint nodePosition, [FromQuery] uint lastKeyHashInclusively, CancellationToken cancellationToken)
+        public async Task RemoveFirstHalfOfCacheAsync([FromRoute] uint nodePosition, CancellationToken cancellationToken)
         {
-            await _childNodeService.RemoveFirstHalfOfCacheAsync(nodePosition, lastKeyHashInclusively, cancellationToken);
+            await _childNodeService.RemoveFirstHalfOfCacheAsync(nodePosition, cancellationToken);
         }
 
         [HttpPost("{nodePosition}/bulk")]

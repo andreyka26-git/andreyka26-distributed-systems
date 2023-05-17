@@ -73,7 +73,7 @@ namespace DistributedCache.Master
             var newPhysicalNode = await _physicalNodeProvider.CreateChildPhysicalNodeAsync(cancellationToken: cancellationToken);
             var firstHalf = await _childClient.GetFirstHalfOfCacheAsync(hotVirtualNode, hotPhysicalNode, cancellationToken);
 
-            var nodePosition = firstHalf.Last().Key;
+            var nodePosition = firstHalf.OrderBy(h => h.Key).Last().Key;
             var newVirtualNode = new VirtualNode(nodePosition, hotVirtualNode.MaxItemsCount);
 
             foreach (var loadBalancerNode in _physicalNodeProvider.LoadBalancers)
@@ -84,7 +84,7 @@ namespace DistributedCache.Master
             await _childClient.AddNewVirtualNodeAsync(newPhysicalNode, newVirtualNode, cancellationToken);
             await _childClient.AddFirstHalfToNewNodeAsync(firstHalf, newVirtualNode, newPhysicalNode, cancellationToken);
 
-            await _childClient.RemoveFirstHalfOfCache(nodePosition, hotVirtualNode, hotPhysicalNode, cancellationToken);
+            await _childClient.RemoveFirstHalfOfCache(hotVirtualNode, hotPhysicalNode, cancellationToken);
         }
     }
 }

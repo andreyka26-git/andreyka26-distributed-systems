@@ -71,15 +71,15 @@ namespace DistributedCache.ChildNode
         {
             var (_, cache) = _nodeToCacheMapping[nodePosition];
 
-            var firstPart = cache.GetFirstHalfOfCache();
+            var firstPart = cache.GetFirstHalfOfCache(nodePosition);
             return Task.FromResult(firstPart);
         }
 
-        public Task RemoveFirstHalfOfCacheAsync(uint nodePosition, uint lastKeyHashInclusively, CancellationToken cancellationToken)
+        public Task RemoveFirstHalfOfCacheAsync(uint nodePosition, CancellationToken cancellationToken)
         {
             var (_, cache) = _nodeToCacheMapping[nodePosition];
 
-            cache.RemoveFirstHalfOfCache(lastKeyHashInclusively);
+            cache.RemoveFirstHalfOfCache(nodePosition);
             return Task.CompletedTask;
         }
 

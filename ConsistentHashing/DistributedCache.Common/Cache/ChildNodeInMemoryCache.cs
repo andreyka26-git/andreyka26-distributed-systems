@@ -9,7 +9,7 @@ namespace DistributedCache.Common
         public Dictionary<uint, string> Cache => _cache;
 
         private readonly Dictionary<uint, string> _cache = new Dictionary<uint, string>();
-        private readonly SortedList<uint, uint> _sortedCacheHashes = new SortedList<uint, uint>();
+        private readonly SortedList<uint, uint> _sortedInAscCacheHashes = new SortedList<uint, uint>();
 
         public ChildNodeInMemoryCache(int maxNodeItemsCount)
         {
@@ -19,7 +19,7 @@ namespace DistributedCache.Common
         public bool AddToCache(uint keyHash, string value)
         {
             _cache[keyHash] = value;
-            _sortedCacheHashes[keyHash] = keyHash;
+            _sortedInAscCacheHashes[keyHash] = keyHash;
 
             if (GetCountOfItems() >= _maxNodeItemsCount)
             {
@@ -45,13 +45,22 @@ namespace DistributedCache.Common
         public void RemoveFromCache(uint keyHash)
         {
             _cache.Remove(keyHash);
-            _sortedCacheHashes.Remove(keyHash);
+            _sortedInAscCacheHashes.Remove(keyHash);
         }
 
-        public Dictionary<uint, string> GetFirstHalfOfCache()
+        public Dictionary<uint, string> GetFirstHalfOfCache(uint nodePosition)
         {
             var halfCount = _cache.Count / 2;
-            var firstHalf = _sortedCacheHashes.Take(halfCount);
+            var firstHalf = _sortedInAscCacheHashes.Where(k => k.Key <= nodePosition).Take(halfCount).ToList();
+
+            var tailDelta = halfCount - firstHalf.Count;
+
+            if (tailDelta > 0)
+            {
+                //add from the tail
+                var rest = _sortedInAscCacheHashes.Reverse().Take(tailDelta);
+                firstHalf.AddRange(rest);
+            }
 
             var halfDict = new Dictionary<uint, string>(halfCount);
 
@@ -63,13 +72,13 @@ namespace DistributedCache.Common
             return halfDict;
         }
 
-        public void RemoveFirstHalfOfCache(uint lastKeyHashInclusively)
+        public void RemoveFirstHalfOfCache(uint nodePosition)
         {
-            var keyHashesToRemove = _sortedCacheHashes.Where(k => k.Key <= lastKeyHashInclusively).ToList();
+            var keyHashesToRemove = GetFirstHalfOfCache(nodePosition);
 
             foreach(var keyHashToRemove in keyHashesToRemove)
             {
-                _sortedCacheHashes.Remove(keyHashToRemove.Key);
+                _sortedInAscCacheHashes.Remove(keyHashToRemove.Key);
                 _cache.Remove(keyHashToRemove.Key);
             }
         }

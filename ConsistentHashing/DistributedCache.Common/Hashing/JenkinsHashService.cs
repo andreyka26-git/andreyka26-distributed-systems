@@ -8,7 +8,7 @@ namespace DistributedCache.Common.Hashing
     // GetHashCode is not that stable, and we would like to not be coupled to C#
     public class JenkinsHashService : IHashService
     {
-        public static readonly uint JenkinsMaxHashValue = int.MaxValue;
+        public static readonly uint JenkinsMaxHashValue = uint.MaxValue;
 
         private readonly IJenkinsOneAtATime _jenkinsOneAtATime = JenkinsOneAtATimeFactory.Instance.Create();
 
