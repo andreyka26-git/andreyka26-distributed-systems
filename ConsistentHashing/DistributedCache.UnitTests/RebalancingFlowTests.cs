@@ -92,7 +92,7 @@ namespace DistributedCache.UnitTests
         }
 
         [Test]
-        public async Task MvpSetUp_RebalanceHotNode_CanGetThemBack()
+        public async Task MvpSetUp_RebalanceTo2HotNode_CanGetThemBack()
         {
             await _masterService.CreateLoadBalancerAsync(1000, _defaultCancellationToken);
             await _masterService.CreateNewChildNodeAsync(1001, _defaultCancellationToken);
@@ -128,6 +128,62 @@ namespace DistributedCache.UnitTests
             Assert.That(await loadBalancerService.GetValueAsync("key3", _defaultCancellationToken), Is.EqualTo("key3"));
             Assert.That(await loadBalancerService.GetValueAsync("key4", _defaultCancellationToken), Is.EqualTo("key4"));
             Assert.That(await loadBalancerService.GetValueAsync("key5", _defaultCancellationToken), Is.EqualTo("key5"));
+        }
+
+        [Test]
+        public async Task MvpSetUp_RebalanceTo3HotNode_CanGetThemBack()
+        {
+            await _masterService.CreateLoadBalancerAsync(1000, _defaultCancellationToken);
+            await _masterService.CreateNewChildNodeAsync(1001, _defaultCancellationToken);
+
+            var loadBalancerNode = _physicalNodeProviderFake.LoadBalancers[0];
+            var loadBalancerService = _loadBalancerClientFake.LoadBalancerToServiceMapping[loadBalancerNode];
+
+            await loadBalancerService.AddValueAsync("key1", "key1", _defaultCancellationToken);
+            await loadBalancerService.AddValueAsync("key2", "key2", _defaultCancellationToken);
+            await loadBalancerService.AddValueAsync("key3", "key3", _defaultCancellationToken);
+            await loadBalancerService.AddValueAsync("key4", "key4", _defaultCancellationToken);
+            await loadBalancerService.AddValueAsync("key5", "key5", _defaultCancellationToken);
+            await loadBalancerService.AddValueAsync("key6", "key6", _defaultCancellationToken);
+            await loadBalancerService.AddValueAsync("key7", "key7", _defaultCancellationToken);
+            await loadBalancerService.AddValueAsync("key8", "key8", _defaultCancellationToken);
+            await loadBalancerService.AddValueAsync("key9", "key9", _defaultCancellationToken);
+            await loadBalancerService.AddValueAsync("key10", "key10", _defaultCancellationToken);
+
+            var childPhysicalNode1 = _physicalNodeProviderFake.ChildNodes[0];
+            var childService1 = _childClientFake.ChildNodeToServiceMapping[childPhysicalNode1];
+            var (node1, cache1) = childService1.NodeToCacheMapping.Single().Value;
+
+            var childPhysicalNode2 = _physicalNodeProviderFake.ChildNodes[1];
+            var childService2 = _childClientFake.ChildNodeToServiceMapping[childPhysicalNode2];
+            var (node2, cache2) = childService2.NodeToCacheMapping.Single().Value;
+
+            var childPhysicalNode3 = _physicalNodeProviderFake.ChildNodes[1];
+            var childService3 = _childClientFake.ChildNodeToServiceMapping[childPhysicalNode3];
+            var (node3, cache3) = childService3.NodeToCacheMapping.Single().Value;
+
+            var allInfo = await _masterService.GetClusterInformationAsync(_defaultCancellationToken);
+            var firstLoadBalancer = allInfo.LoadBalancerInformations.First().Value;
+            var allVirtualNodes = firstLoadBalancer.ChildInformationModels
+                .SelectMany(c => c.Value.VirtualNodesWithItems)
+                .OrderBy(c => c.Value.Max(v => v.Key))
+                .ToList();
+
+            var allCount = allVirtualNodes.Sum(c => c.Value.Count);
+
+            Assert.That(cache1.Cache.Count, Is.LessThanOrEqualTo(allCount / 2 + 1));
+            Assert.That(cache2.Cache.Count, Is.LessThanOrEqualTo(allCount / 2 + 1));
+            Assert.That(cache3.Cache.Count, Is.LessThanOrEqualTo(allCount / 2 + 1));
+
+            Assert.That(await loadBalancerService.GetValueAsync("key1", _defaultCancellationToken), Is.EqualTo("key1"));
+            Assert.That(await loadBalancerService.GetValueAsync("key2", _defaultCancellationToken), Is.EqualTo("key2"));
+            Assert.That(await loadBalancerService.GetValueAsync("key3", _defaultCancellationToken), Is.EqualTo("key3"));
+            Assert.That(await loadBalancerService.GetValueAsync("key4", _defaultCancellationToken), Is.EqualTo("key4"));
+            Assert.That(await loadBalancerService.GetValueAsync("key5", _defaultCancellationToken), Is.EqualTo("key5"));
+            Assert.That(await loadBalancerService.GetValueAsync("key6", _defaultCancellationToken), Is.EqualTo("key6"));
+            Assert.That(await loadBalancerService.GetValueAsync("key7", _defaultCancellationToken), Is.EqualTo("key7"));
+            Assert.That(await loadBalancerService.GetValueAsync("key8", _defaultCancellationToken), Is.EqualTo("key8"));
+            Assert.That(await loadBalancerService.GetValueAsync("key9", _defaultCancellationToken), Is.EqualTo("key9"));
         }
 
         private LoadBalancerService GetLoadBalancerService(ChildClientFake childClient)

@@ -1,10 +1,11 @@
-﻿using DistributedCache.ChildNode;
-using DistributedCache.Common.NodeManagement;
+﻿using DistributedCache.Common.NodeManagement;
 
 namespace DistributedCache.UnitTests.Fakes
 {
     internal class PhysicalNodeProviderFake : IPhysicalNodeProvider
     {
+        private int _port = 1005;
+
         private readonly List<PhysicalNode> _loadBalancers = new List<PhysicalNode>();
         private readonly List<PhysicalNode> _childNodes = new List<PhysicalNode>();
 
@@ -16,7 +17,7 @@ namespace DistributedCache.UnitTests.Fakes
 
         public Task<PhysicalNode> CreateChildPhysicalNodeAsync(int? port = null, CancellationToken cancellationToken = default)
         {
-            var node = new PhysicalNode(new Uri($"http://some:{port}"));
+            var node = new PhysicalNode(new Uri($"http://some:{++_port}"));
             _childNodes.Add(node);
 
             ChildCreated?.Invoke(this, node);
