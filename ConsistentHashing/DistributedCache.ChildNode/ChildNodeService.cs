@@ -2,15 +2,16 @@
 using DistributedCache.Common;
 using DistributedCache.Common.Cache;
 using DistributedCache.Common.InformationModels;
+using DistributedCache.Common.Concurrency;
 
 namespace DistributedCache.ChildNode
 {
     public class ChildNodeService : IChildNodeService
     {
-        private readonly Dictionary<uint, (VirtualNode Node, IChildNodeInMemoryCache Cache)> _nodeToCacheMapping =
-            new Dictionary<uint, (VirtualNode, IChildNodeInMemoryCache)>();
+        private readonly Dictionary<uint, IChildNodeInMemoryCache> _nodeToCacheMapping =
+            new Dictionary<uint, IChildNodeInMemoryCache>();
 
-        public IReadOnlyDictionary<uint, (VirtualNode Node, IChildNodeInMemoryCache Cache)> NodeToCacheMapping => _nodeToCacheMapping;
+        public IReadOnlyDictionary<uint, IChildNodeInMemoryCache> NodeToCacheMapping => _nodeToCacheMapping;
 
         private readonly IRebalancingQueue _rebalancingQueue;
 
@@ -24,9 +25,9 @@ namespace DistributedCache.ChildNode
         {
             var model = new ChildInformationModel();
 
-            foreach (var (keyHash, (node, cache)) in _nodeToCacheMapping)
+            foreach (var (position, cache) in _nodeToCacheMapping)
             {
-                model.VirtualNodesWithItems.Add(node, cache.Cache);
+                model.VirtualNodesWithItems.Add(cache.Node, cache.Cache);
             }
 
             return Task.FromResult(model);
@@ -34,7 +35,7 @@ namespace DistributedCache.ChildNode
 
         public Task AddNodeAsync(VirtualNode node, CancellationToken cancellationToken)
         {
-            _nodeToCacheMapping.Add(node.RingPosition, (node, new ChildNodeInMemoryCache(node.MaxItemsCount)));
+            _nodeToCacheMapping.Add(node.RingPosition, new ThreadSafeChildNodeInMemoryCache(node, new ReadWriteLockService()));
             return Task.CompletedTask;
         }
 
@@ -46,7 +47,7 @@ namespace DistributedCache.ChildNode
 
         public Task<string> GetValueAsync(uint nodePosition, uint keyHash, CancellationToken cancellationToken)
         {
-            var value = _nodeToCacheMapping[nodePosition].Cache.GetFromCache(keyHash);
+            var value = _nodeToCacheMapping[nodePosition].GetFromCache(keyHash);
             return Task.FromResult(value);
         }
 
@@ -57,7 +58,7 @@ namespace DistributedCache.ChildNode
                 throw new Exception($"there is no node for {nodePosition}, please add virtual node");
             }
 
-            var doesNeedRebalancing = _nodeToCacheMapping[nodePosition].Cache.AddToCache(keyHash, value);
+            var doesNeedRebalancing = _nodeToCacheMapping[nodePosition].AddToCache(keyHash, value);
 
             if (doesNeedRebalancing)
             {
@@ -69,23 +70,23 @@ namespace DistributedCache.ChildNode
 
         public Task<Dictionary<uint, string>> GetFirstHalfOfCacheAsync(uint nodePosition, CancellationToken cancellationToken)
         {
-            var (_, cache) = _nodeToCacheMapping[nodePosition];
+            var cache = _nodeToCacheMapping[nodePosition];
 
-            var firstPart = cache.GetFirstHalfOfCache(nodePosition);
+            var firstPart = cache.GetFirstHalfOfCache();
             return Task.FromResult(firstPart);
         }
 
         public Task RemoveFirstHalfOfCacheAsync(uint nodePosition, CancellationToken cancellationToken)
         {
-            var (_, cache) = _nodeToCacheMapping[nodePosition];
+            var cache = _nodeToCacheMapping[nodePosition];
 
-            cache.RemoveFirstHalfOfCache(nodePosition);
+            cache.RemoveFirstHalfOfCache();
             return Task.CompletedTask;
         }
 
         public Task AddBulkToCacheAsync(uint nodePosition, Dictionary<uint, string> cacheItems, CancellationToken cancellationToken)
         {
-            var (_, cache) = _nodeToCacheMapping[nodePosition];
+            var cache = _nodeToCacheMapping[nodePosition];
 
             cache.AddBulkToCache(cacheItems);
             return Task.CompletedTask;
@@ -93,8 +94,27 @@ namespace DistributedCache.ChildNode
 
         public Task<int> GetCountAsync(uint nodePosition, CancellationToken cancellationToken)
         {
-            var count = _nodeToCacheMapping[nodePosition].Cache.GetCountOfItems();
+            var count = _nodeToCacheMapping[nodePosition].GetCountOfItems();
             return Task.FromResult(count);
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposing)
+            {
+                return;
+            }
+
+            foreach(var (_, cache) in _nodeToCacheMapping)
+            {
+                cache.Dispose();
+            }
         }
     }
 }

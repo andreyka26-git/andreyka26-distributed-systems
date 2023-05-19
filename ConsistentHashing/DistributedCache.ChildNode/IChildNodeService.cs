@@ -4,10 +4,10 @@ using DistributedCache.Common.NodeManagement;
 
 namespace DistributedCache.ChildNode
 {
-    public interface IChildNodeService
+    public interface IChildNodeService : IDisposable
     {
+        IReadOnlyDictionary<uint, IChildNodeInMemoryCache> NodeToCacheMapping { get; }
         Task<ChildInformationModel> GetChildClusterInformationModelAsync(CancellationToken cancellationToken);
-        IReadOnlyDictionary<uint, (VirtualNode Node, IChildNodeInMemoryCache Cache)> NodeToCacheMapping { get; }
         Task AddNodeAsync(VirtualNode node, CancellationToken cancellationToken);
         Task RemoveNodeAsync(uint position, CancellationToken cancellationToken);
         Task<string> GetValueAsync(uint nodePosition, uint keyHash, CancellationToken cancellationToken);

@@ -77,7 +77,7 @@ namespace DistributedCache.UnitTests
 
             var firstChildPhysicalNode = _physicalNodeProviderFake.ChildNodes[0];
             var firstChildService = _childClientFake.ChildNodeToServiceMapping[firstChildPhysicalNode];
-            var (node, cache) = firstChildService.NodeToCacheMapping.Single().Value;
+            var (node, cache) = firstChildService.NodeToCacheMapping.Single();
 
             Assert.That(cache.Cache[_hashService.GetHash("key1")], Is.EqualTo("key1"));
             Assert.That(cache.Cache[_hashService.GetHash("key2")], Is.EqualTo("key2"));
@@ -108,11 +108,11 @@ namespace DistributedCache.UnitTests
 
             var childPhysicalNode1 = _physicalNodeProviderFake.ChildNodes[0];
             var childService1 = _childClientFake.ChildNodeToServiceMapping[childPhysicalNode1];
-            var (node1, cache1) = childService1.NodeToCacheMapping.Single().Value;
+            var (node1, cache1) = childService1.NodeToCacheMapping.Single();
 
             var childPhysicalNode2 = _physicalNodeProviderFake.ChildNodes[1];
             var childService2 = _childClientFake.ChildNodeToServiceMapping[childPhysicalNode2];
-            var (node2, cache2) = childService2.NodeToCacheMapping.Single().Value;
+            var (node2, cache2) = childService2.NodeToCacheMapping.Single();
 
             var allInfo = await _masterService.GetClusterInformationAsync(_defaultCancellationToken);
             var firstLoadBalancer = allInfo.LoadBalancerInformations.First().Value;
@@ -152,15 +152,15 @@ namespace DistributedCache.UnitTests
 
             var childPhysicalNode1 = _physicalNodeProviderFake.ChildNodes[0];
             var childService1 = _childClientFake.ChildNodeToServiceMapping[childPhysicalNode1];
-            var (node1, cache1) = childService1.NodeToCacheMapping.Single().Value;
+            var (node1, cache1) = childService1.NodeToCacheMapping.Single();
 
             var childPhysicalNode2 = _physicalNodeProviderFake.ChildNodes[1];
             var childService2 = _childClientFake.ChildNodeToServiceMapping[childPhysicalNode2];
-            var (node2, cache2) = childService2.NodeToCacheMapping.Single().Value;
+            var (node2, cache2) = childService2.NodeToCacheMapping.Single();
 
             var childPhysicalNode3 = _physicalNodeProviderFake.ChildNodes[1];
             var childService3 = _childClientFake.ChildNodeToServiceMapping[childPhysicalNode3];
-            var (node3, cache3) = childService3.NodeToCacheMapping.Single().Value;
+            var (node3, cache3) = childService3.NodeToCacheMapping.Single();
 
             var allInfo = await _masterService.GetClusterInformationAsync(_defaultCancellationToken);
             var firstLoadBalancer = allInfo.LoadBalancerInformations.First().Value;

@@ -1,14 +1,17 @@
-﻿namespace DistributedCache.Common.Cache
+﻿using DistributedCache.Common.NodeManagement;
+
+namespace DistributedCache.Common.Cache
 {
-    public interface IChildNodeInMemoryCache
+    public interface IChildNodeInMemoryCache : IDisposable
     {
+        VirtualNode Node { get; }
         Dictionary<uint, string> Cache { get; }
         bool AddToCache(uint keyHash, string value);
-        void AddBulkToCache(Dictionary<uint, string> cacheItems);
-        void RemoveFromCache(uint keyHash);
-        Dictionary<uint, string> GetFirstHalfOfCache(uint nodePosition);
-        void RemoveFirstHalfOfCache(uint nodePosition);
-        int GetCountOfItems();
         string GetFromCache(uint keyHash);
+        void RemoveFromCache(uint keyHash);
+        int GetCountOfItems();
+        void AddBulkToCache(Dictionary<uint, string> cacheItems);
+        Dictionary<uint, string> GetFirstHalfOfCache();
+        void RemoveFirstHalfOfCache();
     }
 }
