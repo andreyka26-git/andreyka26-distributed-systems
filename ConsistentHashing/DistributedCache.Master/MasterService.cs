@@ -15,7 +15,7 @@ namespace DistributedCache.Master
         private readonly IPhysicalNodeProvider _physicalNodeProvider;
         private readonly ILoadBalancerNodeClient _loadBalancerClient;
         private readonly IHashService _hashService;
-        private readonly IReadWriteLockService _lockService;
+        private readonly IAsyncSerializableLockService _lockService;
 
         public MasterService(
             IChildNodeClient childClient,
@@ -23,7 +23,7 @@ namespace DistributedCache.Master
             IPhysicalNodeProvider physicalNodeProvider,
             ILoadBalancerNodeClient loadBalancerClient,
             IHashService hashService,
-            IReadWriteLockService lockService)
+            IAsyncSerializableLockService lockService)
         {
             _childClient = childClient;
             _nodeManager = nodeManager;
@@ -48,10 +48,12 @@ namespace DistributedCache.Master
 
         public async Task<PhysicalNode> CreateLoadBalancerAsync(int port, CancellationToken cancellationToken)
         {
-            _lockService.Write(() =>
+            var node = await _lockService.ExecuteSeriallyAsync(() =>
             {
-                return CreateLoadBalancerNotSafeAsync(port, cancellationToken).GetAwaiter().GetResult();
+                return CreateLoadBalancerNotSafeAsync(port, cancellationToken);
             });
+
+            return node;
         }
 
         public async Task<PhysicalNode> CreateLoadBalancerNotSafeAsync(int port, CancellationToken cancellationToken)
@@ -62,7 +64,12 @@ namespace DistributedCache.Master
 
         public async Task<PhysicalNode> CreateNewChildNodeAsync(int port, CancellationToken cancellationToken)
         {
-            
+            var node = await _lockService.ExecuteSeriallyAsync(() =>
+            {
+                return CreateNewChildNodeNotSafeAsync(port, cancellationToken);
+            });
+
+            return node;
         }
 
         public async Task<PhysicalNode> CreateNewChildNodeNotSafeAsync(int port, CancellationToken cancellationToken)
@@ -84,6 +91,14 @@ namespace DistributedCache.Master
         }
 
         public async Task RebalanceNodeAsync(VirtualNode hotVirtualNode, CancellationToken cancellationToken)
+        {
+            await _lockService.ExecuteSeriallyAsync(() =>
+            {
+                return RebalanceNodeNotSafeAsync(hotVirtualNode, cancellationToken);
+            });
+        }
+
+        public async Task RebalanceNodeNotSafeAsync(VirtualNode hotVirtualNode, CancellationToken cancellationToken)
         {
             var hotPhysicalNode = _nodeManager.ResolvePhysicalNode(hotVirtualNode);
 

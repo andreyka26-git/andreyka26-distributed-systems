@@ -1,5 +1,6 @@
 ﻿using DistributedCache.ChildNode;
 using DistributedCache.Common;
+using DistributedCache.Common.Concurrency;
 using DistributedCache.Common.Hashing;
 using DistributedCache.Common.NodeManagement;
 using DistributedCache.Common.Serializers;
@@ -25,6 +26,7 @@ namespace DistributedCache.UnitTests
         {
             _childClientFake = new ChildClientFake();
             _loadBalancerClientFake = new LoadBalancerClientFake();
+            var lockService = new AsyncSerializableLockService(TimeSpan.FromSeconds(10));
 
             var serializer = new NewtonsoftSerializer();
             _hashService = new JenkinsHashService(serializer);
@@ -38,7 +40,8 @@ namespace DistributedCache.UnitTests
                 childNodeManager,
                 _physicalNodeProviderFake,
                 _loadBalancerClientFake,
-                _hashService);
+                _hashService,
+                lockService);
 
             _physicalNodeProviderFake.ChildCreated += (obj, node) =>
             {
