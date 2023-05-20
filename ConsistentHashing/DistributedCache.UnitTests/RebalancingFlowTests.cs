@@ -6,7 +6,6 @@ using DistributedCache.Common.Serializers;
 using DistributedCache.LoadBalancer;
 using DistributedCache.Master;
 using DistributedCache.UnitTests.Fakes;
-using System.Linq;
 
 namespace DistributedCache.UnitTests
 {
@@ -188,7 +187,6 @@ namespace DistributedCache.UnitTests
 
         private LoadBalancerService GetLoadBalancerService(ChildClientFake childClient)
         {
-            var serializer = new NewtonsoftSerializer();
             var hashingRing = new HashingRing(_hashService);
 
             var childNodeManager = new ChildNodeManager(hashingRing);

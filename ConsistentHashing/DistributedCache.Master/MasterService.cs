@@ -1,4 +1,5 @@
 ﻿using DistributedCache.Common.Clients;
+using DistributedCache.Common.Concurrency;
 using DistributedCache.Common.Hashing;
 using DistributedCache.Common.InformationModels;
 using DistributedCache.Common.NodeManagement;
@@ -14,19 +15,22 @@ namespace DistributedCache.Master
         private readonly IPhysicalNodeProvider _physicalNodeProvider;
         private readonly ILoadBalancerNodeClient _loadBalancerClient;
         private readonly IHashService _hashService;
+        private readonly IReadWriteLockService _lockService;
 
         public MasterService(
             IChildNodeClient childClient,
             IChildNodeManager nodeManager,
             IPhysicalNodeProvider physicalNodeProvider,
             ILoadBalancerNodeClient loadBalancerClient,
-            IHashService hashService)
+            IHashService hashService,
+            IReadWriteLockService lockService)
         {
             _childClient = childClient;
             _nodeManager = nodeManager;
             _physicalNodeProvider = physicalNodeProvider;
             _loadBalancerClient = loadBalancerClient;
             _hashService = hashService;
+            _lockService = lockService;
         }
 
         public async Task<ClusterInformationModel> GetClusterInformationAsync(CancellationToken cancellationToken)
@@ -44,11 +48,24 @@ namespace DistributedCache.Master
 
         public async Task<PhysicalNode> CreateLoadBalancerAsync(int port, CancellationToken cancellationToken)
         {
+            _lockService.Write(() =>
+            {
+                return CreateLoadBalancerNotSafeAsync(port, cancellationToken).GetAwaiter().GetResult();
+            });
+        }
+
+        public async Task<PhysicalNode> CreateLoadBalancerNotSafeAsync(int port, CancellationToken cancellationToken)
+        {
             var node = await _physicalNodeProvider.CreateLoadBalancerPhysicalNodeAsync(port, cancellationToken);
             return node;
         }
 
         public async Task<PhysicalNode> CreateNewChildNodeAsync(int port, CancellationToken cancellationToken)
+        {
+            
+        }
+
+        public async Task<PhysicalNode> CreateNewChildNodeNotSafeAsync(int port, CancellationToken cancellationToken)
         {
             var childNode = await _physicalNodeProvider.CreateChildPhysicalNodeAsync(port, cancellationToken);
             var virtualNode = new VirtualNode(_hashService.GetHash(childNode.Location.ToString()), MaxChildNodeItems);
@@ -58,7 +75,7 @@ namespace DistributedCache.Master
 
             await _childClient.AddNewVirtualNodeAsync(childNode, virtualNode, cancellationToken);
 
-            foreach(var loadBalancer in _physicalNodeProvider.LoadBalancers)
+            foreach (var loadBalancer in _physicalNodeProvider.LoadBalancers)
             {
                 await _loadBalancerClient.AddVirtualNodeAsync(loadBalancer, virtualNode, childNode, cancellationToken);
             }
