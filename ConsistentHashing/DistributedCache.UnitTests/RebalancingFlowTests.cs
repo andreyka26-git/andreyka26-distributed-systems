@@ -117,10 +117,10 @@ namespace DistributedCache.UnitTests
             var (node2, cache2) = childService2.NodeToCacheMapping.Single();
 
             var allInfo = await _masterService.GetClusterInformationAsync(_defaultCancellationToken);
-            var firstLoadBalancer = allInfo.LoadBalancerInformations.First().Value;
-            var allVirtualNodes = firstLoadBalancer.ChildInformationModels.SelectMany(c => c.Value.VirtualNodesWithItems).ToList();
+            var firstLoadBalancer = allInfo.LoadBalancerInformations.First().LoadBalancerInfo;
+            var allVirtualNodes = firstLoadBalancer.ChildInformationModels.SelectMany(c => c.ChildInfo.VirtualNodesWithItems).ToList();
 
-            var allCount = allVirtualNodes.Sum(c => c.Value.Count);
+            var allCount = allVirtualNodes.Sum(c => c.CacheItems.Count);
 
             Assert.That(cache1.Cache.Count, Is.LessThanOrEqualTo(allCount / 2 + 1));
             Assert.That(cache2.Cache.Count, Is.LessThanOrEqualTo(allCount / 2 + 1));
@@ -165,13 +165,13 @@ namespace DistributedCache.UnitTests
             var (node3, cache3) = childService3.NodeToCacheMapping.Single();
 
             var allInfo = await _masterService.GetClusterInformationAsync(_defaultCancellationToken);
-            var firstLoadBalancer = allInfo.LoadBalancerInformations.First().Value;
+            var firstLoadBalancer = allInfo.LoadBalancerInformations.First().LoadBalancerInfo;
             var allVirtualNodes = firstLoadBalancer.ChildInformationModels
-                .SelectMany(c => c.Value.VirtualNodesWithItems)
-                .OrderBy(c => c.Value.Max(v => v.Key))
+                .SelectMany(c => c.ChildInfo.VirtualNodesWithItems)
+                .OrderBy(c => c.CacheItems.Max(v => v.Key))
                 .ToList();
 
-            var allCount = allVirtualNodes.Sum(c => c.Value.Count);
+            var allCount = allVirtualNodes.Sum(c => c.CacheItems.Count);
 
             Assert.That(cache1.Cache.Count, Is.LessThanOrEqualTo(allCount / 2 + 1));
             Assert.That(cache2.Cache.Count, Is.LessThanOrEqualTo(allCount / 2 + 1));

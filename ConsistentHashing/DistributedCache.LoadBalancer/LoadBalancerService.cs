@@ -29,7 +29,12 @@ namespace DistributedCache.LoadBalancer
             foreach (var (node, virtualNodes) in _nodeManager.PhysicalToVirtualMapping)
             {
                 var childModel = await _childNodeClient.GetChildClusterInformationModelAsync(node, cancellationToken);
-                model.ChildInformationModels.Add(node, childModel);
+                model.ChildInformationModels.Add(
+                    new LoadBalancerInformationModelItem
+                    {
+                        PhysicalNode = node,
+                        ChildInfo = childModel
+                    });
             }
 
             return model;

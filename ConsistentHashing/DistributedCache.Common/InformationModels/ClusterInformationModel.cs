@@ -4,6 +4,6 @@ namespace DistributedCache.Common.InformationModels
 {
     public class ClusterInformationModel
     {
-        public Dictionary<PhysicalNode, LoadBalancerInformationModel> LoadBalancerInformations { get; set; } = new Dictionary<PhysicalNode, LoadBalancerInformationModel>();
+        public List<ClusterInformationModelItem> LoadBalancerInformations { get; set; } = new List<ClusterInformationModelItem>();
     }
 }

@@ -40,7 +40,11 @@ namespace DistributedCache.Master
             foreach(var loadBalancer in _physicalNodeProvider.LoadBalancers)
             {
                 var loadBalancerInformationModel = await _loadBalancerClient.GetLoadBalancerInformationModelAsync(loadBalancer, cancellationToken);
-                clusterInformation.LoadBalancerInformations.Add(loadBalancer, loadBalancerInformationModel);
+                clusterInformation.LoadBalancerInformations.Add(new ClusterInformationModelItem
+                {
+                    LoadBalancerInfo = loadBalancerInformationModel,
+                    PhysicalNode = loadBalancer
+                });
             }
 
             return clusterInformation;

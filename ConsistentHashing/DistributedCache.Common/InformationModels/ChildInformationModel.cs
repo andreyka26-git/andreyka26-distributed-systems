@@ -1,9 +1,7 @@
-﻿using DistributedCache.Common.NodeManagement;
-
-namespace DistributedCache.Common.InformationModels
+﻿namespace DistributedCache.Common.InformationModels
 {
     public class ChildInformationModel
     {
-        public Dictionary<VirtualNode, Dictionary<uint, string>> VirtualNodesWithItems { get; set; } = new Dictionary<VirtualNode, Dictionary<uint, string>>();
+        public List<ChildInformationModelItem> VirtualNodesWithItems { get; set; } = new List<ChildInformationModelItem>();
     }
 }

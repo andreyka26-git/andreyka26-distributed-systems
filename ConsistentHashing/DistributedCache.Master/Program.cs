@@ -11,7 +11,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddNewtonsoftJson();
+
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -28,7 +30,7 @@ builder.Services.AddSingleton<IPhysicalNodeProvider, PhysicalNodeProvider>();
 builder.Services.AddSingleton<IBinarySerializer, NewtonsoftSerializer>();
 builder.Services.AddSingleton<IHashingRing, HashingRing>();
 builder.Services.AddSingleton<IHashService, JenkinsHashService>();
-builder.Services.AddSingleton<IAsyncSerializableLockService, AsyncSerializableLockService>();
+builder.Services.AddSingleton<IAsyncSerializableLockService, AsyncSerializableLockService>(sp => new AsyncSerializableLockService(TimeSpan.FromSeconds(20)));
 
 var app = builder.Build();
 

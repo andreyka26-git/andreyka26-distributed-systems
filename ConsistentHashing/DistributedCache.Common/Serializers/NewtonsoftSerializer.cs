@@ -21,6 +21,12 @@ namespace DistributedCache.Common.Serializers
 
         public T? Deserialize<T>(string str)
         {
+            if (typeof(T) == typeof(string))
+            {
+                // just a hack with open generics to return string without generic constraints
+                return (dynamic)str;
+            }
+
             return JsonConvert.DeserializeObject<T>(str);
         }
     }

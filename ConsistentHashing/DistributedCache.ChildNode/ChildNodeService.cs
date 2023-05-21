@@ -27,7 +27,11 @@ namespace DistributedCache.ChildNode
 
             foreach (var (position, cache) in _nodeToCacheMapping)
             {
-                model.VirtualNodesWithItems.Add(cache.Node, cache.Cache);
+                model.VirtualNodesWithItems.Add(new ChildInformationModelItem
+                {
+                    Node = cache.Node,
+                    CacheItems = cache.Cache
+                });
             }
 
             return Task.FromResult(model);
