@@ -102,8 +102,8 @@ namespace DistributedCache.Master
         {
             var hotPhysicalNode = _nodeManager.ResolvePhysicalNode(hotVirtualNode);
 
-            var newPhysicalNode = await _physicalNodeProvider.CreateChildPhysicalNodeAsync(cancellationToken: cancellationToken);
             var firstHalf = await _childClient.GetFirstHalfOfCacheAsync(hotVirtualNode, hotPhysicalNode, cancellationToken);
+            var newPhysicalNode = await _physicalNodeProvider.CreateChildPhysicalNodeAsync(cancellationToken: cancellationToken);
 
             var nodePosition = firstHalf.OrderBy(h => h.Key).Last().Key;
             var newVirtualNode = new VirtualNode(nodePosition, hotVirtualNode.MaxItemsCount);
@@ -114,6 +114,9 @@ namespace DistributedCache.Master
             }
 
             await _childClient.AddNewVirtualNodeAsync(newPhysicalNode, newVirtualNode, cancellationToken);
+
+            // in case new item added while we are updating loadbalancers - we get first half again to include newly added and not loose data.
+            firstHalf = await _childClient.GetFirstHalfOfCacheAsync(hotVirtualNode, hotPhysicalNode, cancellationToken);
             await _childClient.AddFirstHalfToNewNodeAsync(firstHalf, newVirtualNode, newPhysicalNode, cancellationToken);
 
             await _childClient.RemoveFirstHalfOfCache(hotVirtualNode, hotPhysicalNode, cancellationToken);

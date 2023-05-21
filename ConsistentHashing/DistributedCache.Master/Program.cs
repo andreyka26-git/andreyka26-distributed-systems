@@ -1,5 +1,6 @@
 using DistributedCache.Common;
 using DistributedCache.Common.Clients;
+using DistributedCache.Common.Concurrency;
 using DistributedCache.Common.Hashing;
 using DistributedCache.Common.NodeManagement;
 using DistributedCache.Common.Serializers;
@@ -27,6 +28,7 @@ builder.Services.AddSingleton<IPhysicalNodeProvider, PhysicalNodeProvider>();
 builder.Services.AddSingleton<IBinarySerializer, NewtonsoftSerializer>();
 builder.Services.AddSingleton<IHashingRing, HashingRing>();
 builder.Services.AddSingleton<IHashService, JenkinsHashService>();
+builder.Services.AddSingleton<IAsyncSerializableLockService, AsyncSerializableLockService>();
 
 var app = builder.Build();
 
