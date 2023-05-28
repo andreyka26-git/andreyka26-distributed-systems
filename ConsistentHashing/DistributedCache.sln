@@ -3,15 +3,15 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.33530.505
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistributedCache.ChildNode", "DistributedCache.ChildNode\DistributedCache.ChildNode.csproj", "{A529BB3F-1BC5-4A80-9254-7D283B70AC0A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistributedCache.ChildNode", "src\DistributedCache.ChildNode\DistributedCache.ChildNode.csproj", "{A529BB3F-1BC5-4A80-9254-7D283B70AC0A}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistributedCache.Common", "DistributedCache.Common\DistributedCache.Common.csproj", "{44F6E7B9-F527-47E9-9583-B7659C0A64D4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistributedCache.Common", "src\DistributedCache.Common\DistributedCache.Common.csproj", "{44F6E7B9-F527-47E9-9583-B7659C0A64D4}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistributedCache.Master", "DistributedCache.Master\DistributedCache.Master.csproj", "{0DDBFB04-77D9-4772-B707-03C974AC4A5E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistributedCache.Master", "src\DistributedCache.Master\DistributedCache.Master.csproj", "{0DDBFB04-77D9-4772-B707-03C974AC4A5E}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistributedCache.LoadBalancer", "DistributedCache.LoadBalancer\DistributedCache.LoadBalancer.csproj", "{A40BEA23-9E12-4688-A880-13E75F8409B8}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistributedCache.LoadBalancer", "src\DistributedCache.LoadBalancer\DistributedCache.LoadBalancer.csproj", "{A40BEA23-9E12-4688-A880-13E75F8409B8}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DistributedCache.UnitTests", "DistributedCache.UnitTests\DistributedCache.UnitTests.csproj", "{BEA054C7-C9AA-44D2-BB22-78AF4D4FED23}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DistributedCache.UnitTests", "test\DistributedCache.UnitTests\DistributedCache.UnitTests.csproj", "{BEA054C7-C9AA-44D2-BB22-78AF4D4FED23}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
