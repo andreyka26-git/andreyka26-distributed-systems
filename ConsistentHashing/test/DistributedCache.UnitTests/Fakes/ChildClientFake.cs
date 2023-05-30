@@ -53,9 +53,9 @@ namespace DistributedCache.UnitTests.Fakes
             return value;
         }
 
-        public async Task RemoveFirstHalfOfCache(VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
+        public async Task RemoveFirstHalfOfCache(uint lastItemToRemoveInclusively, VirtualNode virtualNode, PhysicalNode physicalNode, CancellationToken cancellationToken)
         {
-            await ChildNodeToServiceMapping[physicalNode].RemoveFirstHalfOfCacheAsync(virtualNode.RingPosition, cancellationToken);
+            await ChildNodeToServiceMapping[physicalNode].RemoveFirstHalfOfCacheAsync(virtualNode.RingPosition, lastItemToRemoveInclusively, cancellationToken);
         }
 
         public async Task RemoveVirtualNodeAsync(PhysicalNode physicalNode, VirtualNode virtualNode, CancellationToken cancellationToken)

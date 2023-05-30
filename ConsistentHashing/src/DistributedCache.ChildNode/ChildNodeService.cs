@@ -80,11 +80,11 @@ namespace DistributedCache.ChildNode
             return Task.FromResult(firstPart);
         }
 
-        public Task RemoveFirstHalfOfCacheAsync(uint nodePosition, CancellationToken cancellationToken)
+        public Task RemoveFirstHalfOfCacheAsync(uint nodePosition, uint lastItemToRemoveInclusively, CancellationToken cancellationToken)
         {
             var cache = _nodeToCacheMapping[nodePosition];
 
-            cache.RemoveFirstHalfOfCache();
+            cache.RemoveFirstHalfOfCache(lastItemToRemoveInclusively);
             return Task.CompletedTask;
         }
 

@@ -12,6 +12,6 @@ namespace DistributedCache.Common.Cache
         int GetCountOfItems();
         void AddBulkToCache(Dictionary<uint, string> cacheItems);
         Dictionary<uint, string> GetFirstHalfOfCache();
-        void RemoveFirstHalfOfCache();
+        void RemoveFirstHalfOfCache(uint lastItemToRemoveInclusively);
     }
 }

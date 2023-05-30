@@ -59,9 +59,12 @@ namespace DistributedCache.ChildNode.Controllers
         }
 
         [HttpDelete("{nodePosition}/firstHalf")]
-        public async Task RemoveFirstHalfOfCacheAsync([FromRoute] uint nodePosition, CancellationToken cancellationToken)
+        public async Task RemoveFirstHalfOfCacheAsync([FromRoute] uint nodePosition, [FromQuery] uint lastItemToRemoveInclusively, CancellationToken cancellationToken)
         {
-            await _childNodeService.RemoveFirstHalfOfCacheAsync(nodePosition, cancellationToken);
+            if (lastItemToRemoveInclusively == default)
+                throw new Exception($"last item to remove cannot be default");
+
+            await _childNodeService.RemoveFirstHalfOfCacheAsync(nodePosition, lastItemToRemoveInclusively, cancellationToken);
         }
 
         [HttpPost("{nodePosition}/bulk")]

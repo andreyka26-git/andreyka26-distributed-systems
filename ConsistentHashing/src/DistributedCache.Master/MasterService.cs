@@ -106,24 +106,31 @@ namespace DistributedCache.Master
         {
             var hotPhysicalNode = _nodeManager.ResolvePhysicalNode(hotVirtualNode);
 
-            var firstHalf = await _childClient.GetFirstHalfOfCacheAsync(hotVirtualNode, hotPhysicalNode, cancellationToken);
             var newPhysicalNode = await _physicalNodeProvider.CreateChildPhysicalNodeAsync(cancellationToken: cancellationToken);
 
+            var firstHalf = await _childClient.GetFirstHalfOfCacheAsync(hotVirtualNode, hotPhysicalNode, cancellationToken);
             var nodePosition = firstHalf.OrderBy(h => h.Key).Last().Key;
             var newVirtualNode = new VirtualNode(nodePosition, hotVirtualNode.MaxItemsCount);
+
+            _nodeManager.AddVirtualNode(newVirtualNode, newPhysicalNode);
+            await _childClient.AddNewVirtualNodeAsync(newPhysicalNode, newVirtualNode, cancellationToken);
+
+            // first add items that are already in the cache to the new node, before updating load balancers. So once we update load balancer
+            // it is probable that Client will find the item in newly created node
+            await _childClient.AddFirstHalfToNewNodeAsync(firstHalf, newVirtualNode, newPhysicalNode, cancellationToken);
 
             foreach (var loadBalancerNode in _physicalNodeProvider.LoadBalancers)
             {
                 await _loadBalancerClient.AddVirtualNodeAsync(loadBalancerNode, newVirtualNode, newPhysicalNode, cancellationToken);
             }
 
-            await _childClient.AddNewVirtualNodeAsync(newPhysicalNode, newVirtualNode, cancellationToken);
+            // in case new items are added while we are updating load balancers - we get the first half again to include newly added and not lose data
+            // since middle point could be shifted because of new data, we will discard all items that are greater than node's position on Child Node service
+            // also, we don't overwrite duplicates, pretending the fresher data is on new Node, since Clients started writing there after updating load balancers
+            var firstHalfAfterUpdating = await _childClient.GetFirstHalfOfCacheAsync(hotVirtualNode, hotPhysicalNode, cancellationToken);
+            await _childClient.AddFirstHalfToNewNodeAsync(firstHalfAfterUpdating, newVirtualNode, newPhysicalNode, cancellationToken);
 
-            // in case new item added while we are updating loadbalancers - we get first half again to include newly added and not loose data.
-            firstHalf = await _childClient.GetFirstHalfOfCacheAsync(hotVirtualNode, hotPhysicalNode, cancellationToken);
-            await _childClient.AddFirstHalfToNewNodeAsync(firstHalf, newVirtualNode, newPhysicalNode, cancellationToken);
-
-            await _childClient.RemoveFirstHalfOfCache(hotVirtualNode, hotPhysicalNode, cancellationToken);
+            await _childClient.RemoveFirstHalfOfCache(newVirtualNode.RingPosition, hotVirtualNode, hotPhysicalNode, cancellationToken);
         }
     }
 }

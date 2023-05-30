@@ -92,7 +92,10 @@ namespace DistributedCache.Common
             {
                 foreach (var kvp in cacheItems)
                 {
-                    if (_cache.ContainsKey(kvp.Key))
+                    // kvp.Key > _node.RingPosition is needed, because we are doing transfer to new child node twice to not loose data
+                    // during the second time the mid point could be shifted, if it is shifted to the right, we just discard items 
+                    // that are greater than current node's ring position
+                    if (_cache.ContainsKey(kvp.Key) || kvp.Key > _node.RingPosition)
                     {
                         continue;
                     }
@@ -106,7 +109,7 @@ namespace DistributedCache.Common
         {
             var firstHalf = _lockService.Read(() =>
             {
-                var halfDict = GetFirstHalfOfCacheNotSafe();
+                var halfDict = GetFirstHalfOfCacheNotSafe(_node.RingPosition);
 
                 return halfDict;
             });
@@ -114,10 +117,10 @@ namespace DistributedCache.Common
             return firstHalf;
         }
 
-        public Dictionary<uint, string> GetFirstHalfOfCacheNotSafe()
+        public Dictionary<uint, string> GetFirstHalfOfCacheNotSafe(uint lastItemToRemoveInclusively)
         {
             var halfCount = _cache.Count / 2;
-            var firstHalf = _sortedInAscCacheHashes.Where(k => k.Key <= _node.RingPosition).Take(halfCount).ToList();
+            var firstHalf = _sortedInAscCacheHashes.Where(k => k.Key <= lastItemToRemoveInclusively).Take(halfCount).ToList();
 
             var tailDelta = halfCount - firstHalf.Count;
 
@@ -138,11 +141,11 @@ namespace DistributedCache.Common
             return halfDict;
         }
 
-        public void RemoveFirstHalfOfCache()
+        public void RemoveFirstHalfOfCache(uint lastItemToRemoveInclusively)
         {
             _lockService.Write(() =>
             {
-                var keyHashesToRemove = GetFirstHalfOfCacheNotSafe();
+                var keyHashesToRemove = GetFirstHalfOfCacheNotSafe(lastItemToRemoveInclusively);
 
                 foreach (var keyHashToRemove in keyHashesToRemove)
                 {
