@@ -23,18 +23,7 @@ namespace DistributedCache.Common
 
         public bool AddToCache(uint keyHash, string value)
         {
-            var needRebalance = _lockService.Write(() =>
-            {
-                _cache[keyHash] = value;
-                _sortedInAscCacheHashes[keyHash] = keyHash;
-
-                if (GetCountOfItemsNotSafe() >= _node.MaxItemsCount)
-                {
-                    return true;
-                }
-
-                return false;
-            });
+            var needRebalance = _lockService.Write(() => AddToCacheNotSafe(keyHash, value));
 
             return needRebalance;
         }
@@ -54,7 +43,7 @@ namespace DistributedCache.Common
 
         public int GetCountOfItems()
         {
-            return _lockService.Read(() => _cache.Count);
+            return _lockService.Read(() => GetCountOfItemsNotSafe());
         }
 
         public int GetCountOfItemsNotSafe()
@@ -93,9 +82,8 @@ namespace DistributedCache.Common
                 foreach (var kvp in cacheItems)
                 {
                     // kvp.Key > _node.RingPosition is needed, because we are doing transfer to new child node twice to not loose data
-                    // during the second time the mid point could be shifted, if it is shifted to the right, we just discard items 
-                    // that are greater than current node's ring position
-                    if (_cache.ContainsKey(kvp.Key) || kvp.Key > _node.RingPosition)
+                    // during the second time the mid point could be shifted, if it is shifted to the right, at some point they will become expired
+                    if (_cache.ContainsKey(kvp.Key))
                     {
                         continue;
                     }
