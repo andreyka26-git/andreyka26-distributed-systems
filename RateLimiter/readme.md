@@ -2,6 +2,8 @@
 
 As usual dotnet project. F5 in IDE, or using dotnet cli, or docker
 
+`docker compose up`
+
 ## Load tests
 
 install k6 following the official guide

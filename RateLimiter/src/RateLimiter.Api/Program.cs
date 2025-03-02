@@ -2,6 +2,7 @@
 
 using RateLimiter.Api.Application;
 using RateLimiter.Api.Infrastructure;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,7 +11,11 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddSingleton<IRateLimiter, InMemoryRateLimiter>();
+var redis = ConnectionMultiplexer.Connect("redis:6379");
+builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
+
+// builder.Services.AddSingleton<IRateLimiter, InMemoryRateLimiter>();
+builder.Services.AddSingleton<IRateLimiter, RedisBasedRateLimiter>();
 builder.Services.AddSingleton<ProductionService>();
 
 var app = builder.Build();

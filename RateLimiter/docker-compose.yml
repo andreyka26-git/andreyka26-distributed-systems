@@ -8,8 +8,20 @@ services:
     environment:
       - AllowedRateLimitWindow=00:00:01
       - RateLimitPerBucket=10
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     ports:
       - "5000:80"
+    networks:
+      - ratelimiter-network
+    restart: always
+    depends_on:
+      - redis
+
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
     networks:
       - ratelimiter-network
     restart: always
