@@ -21,43 +21,40 @@ public record CallerInfo
 
     public void IncrementRequestCount(int maxAllowed, DateTime requestTime, TimeSpan timeWindow)
     {
+        Interlocked.Increment(ref _requestCount);
+
         if (requestTime - RateLimitBucketStart >= timeWindow)
         {
-            var madeRequests = Volatile.Read(ref _requestCount);
-            
-            RateLimitBucketStart = requestTime;
-            Interlocked.Exchange(ref _requestCount, 0);
-            
-            if (madeRequests >= maxAllowed)
+            lock (_lock)
             {
-                throw new RateLimitException($"Rate limit exceeded for caller {Id}");
+                RateLimitBucketStart = requestTime;
+                Interlocked.Exchange(ref _requestCount, 1);
+                return;
             }
         }
 
-        if (Volatile.Read(ref _requestCount) >= maxAllowed)
+        if (Volatile.Read(ref _requestCount) > maxAllowed)
         {
             throw new RateLimitException($"Rate limit exceeded for caller {Id}");
         }
-
-        Interlocked.Increment(ref _requestCount);
     }
 
     public void IncrementRequestCountSafe(int maxAllowed, DateTime requestTime, TimeSpan timeWindow)
     {
         lock (_lock)
         {
+            _requestCount++;
+            
             if (requestTime - RateLimitBucketStart >= timeWindow)
             {
                 RateLimitBucketStart = requestTime;
-                Interlocked.Exchange(ref _requestCount, 0);
+                Interlocked.Exchange(ref _requestCount, 1);
             }
 
-            if (_requestCount >= maxAllowed)
+            if (_requestCount > maxAllowed)
             {
                 throw new RateLimitException($"Rate limit exceeded for caller {Id}");
             }
-
-            _requestCount++;
         }
     }
 }

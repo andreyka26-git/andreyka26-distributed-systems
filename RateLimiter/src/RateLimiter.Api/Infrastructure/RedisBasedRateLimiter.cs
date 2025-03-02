@@ -20,28 +20,20 @@ public class RedisBasedRateLimiter : IRateLimiter
     {
         var rateLimitPerBucket = _configuration.GetValue<int>("RateLimitPerBucket");
         var allowedTimeWindow = _configuration.GetValue<TimeSpan>("AllowedRateLimitWindow");
-
-        var windowKey = $"{callerId}:{GetWindowKey(requestTime, allowedTimeWindow)}";
-
-        var requestCount = await _redisDb.StringIncrementAsync(windowKey);
-
-        if (requestCount == 1)
+        
+        var windowKey = $"{callerId}:{requestTime:yyyyMMddHHmmss}";
+        
+        var currentCount = await _redisDb.StringIncrementAsync(windowKey);
+        
+        if (currentCount == 1)
         {
             await _redisDb.KeyExpireAsync(windowKey, allowedTimeWindow);
         }
-
-        _logger.LogInformation($"Caller: {callerId}, Requests: {requestCount}, Window: {allowedTimeWindow}");
-
-        if (requestCount > rateLimitPerBucket)
+        
+        if (currentCount > rateLimitPerBucket)
         {
-            _logger.LogWarning($"Rate limit exceeded for {callerId} in the current time window.");
-            throw new RateLimitException("Rate limit exceeded.");
+            _logger.LogWarning("Rate limit exceeded for caller {CallerId}", callerId);
+            throw new RateLimitException("Rate limit exceeded");
         }
-    }
-
-    private string GetWindowKey(DateTime requestTime, TimeSpan window)
-    {
-        var windowStart = requestTime.Ticks / window.Ticks * window.Ticks;
-        return windowStart.ToString();
     }
 }
