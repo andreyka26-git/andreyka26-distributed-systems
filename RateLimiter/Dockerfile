@@ -1,11 +1,14 @@
-﻿FROM mcr.microsoft.com/dotnet/runtime:8.0 AS base
+﻿FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
 WORKDIR /app
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
-COPY ["RateLimiter.Api/RateLimiter.Api.csproj", "RateLimiter.Api/"]
+
+COPY ["src/RateLimiter.Api/RateLimiter.Api.csproj", "RateLimiter.Api/"]
 RUN dotnet restore "RateLimiter.Api/RateLimiter.Api.csproj"
-COPY . .
+
+COPY src/RateLimiter.Api/ RateLimiter.Api/
+
 WORKDIR "/src/RateLimiter.Api"
 RUN dotnet build "RateLimiter.Api.csproj" -c Release -o /app/build
 
@@ -15,4 +18,5 @@ RUN dotnet publish "RateLimiter.Api.csproj" -c Release -o /app/publish /p:UseApp
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+
 ENTRYPOINT ["dotnet", "RateLimiter.Api.dll"]

@@ -15,6 +15,8 @@ builder.Services.AddSingleton<ProductionService>();
 
 var app = builder.Build();
 
+app.Urls.Add("http://+:80");
+
 app.UseSwagger();
 app.UseSwaggerUI();
 
