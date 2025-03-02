@@ -7,39 +7,26 @@ namespace RateLimiter.Api.Infrastructure;
 public class InMemoryRateLimiter : IRateLimiter
 {
     private readonly IConfiguration _configuration;
-    private ConcurrentDictionary<string, CallerInfo> _callers = new();
+    private readonly ConcurrentDictionary<string, CallerInfo> _callerRateLimits = new();
 
     public InMemoryRateLimiter(IConfiguration config)
     {
         _configuration = config;
     }
     
-    public async Task<bool> AllowAsync(DateTime requestTime, string callerId)
+    public async Task AllowAsync(string callerId, DateTime requestTime)
     {
-        if (!_callers.TryGetValue(callerId, out var callerInfo))
-        {
-            var newCallerInfo = new CallerInfo(callerId)
-            {
-                RateLimitBucketStart = requestTime,
-            };
-            
-            newCallerInfo.IncrementRequestCountSafe();
-            _callers.TryAdd(callerId, newCallerInfo);
-            
-            return true;
-        }
-
+        var rateLimitPerBucket = _configuration.GetValue<int>("RateLimitPerBucket");
         var allowedTimeWindow = _configuration.GetValue<TimeSpan>("AllowedRateLimitWindow");
+        
+        var callerInfo = _callerRateLimits.GetOrAdd(callerId, new CallerInfo(callerId, requestTime));
 
         if (requestTime - callerInfo.RateLimitBucketStart >= allowedTimeWindow)
         {
-            lock (callerId)
-            {
-                
-            }
+            //TODO add lock
+            callerInfo.ResetBucket(requestTime);
         }
         
-        callerInfo.IncrementRequestCountSafe();
-        return true;
+        callerInfo.IncrementRequestCountSafe(rateLimitPerBucket);
     }
 }
