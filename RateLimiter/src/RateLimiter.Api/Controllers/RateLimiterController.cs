@@ -30,26 +30,27 @@ public class RateLimiterController : ControllerBase
     }
 
     [HttpGet]
-    public IActionResult PerformRequest([FromQuery] string? userId)
+    public async Task<IActionResult> PerformRequest([FromQuery] string? userId)
     {
         var now = DateTime.UtcNow;
+        var callerId = userId;
+
+        if (string.IsNullOrEmpty(callerId))
+        {
+            callerId = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+        }
 
         try
         {
-            var callerId = userId;
-
-            if (string.IsNullOrEmpty(callerId))
-            {
-                callerId = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
-            }
-
-            _rateLimiter.AllowAsync(callerId, now);
+            await _rateLimiter.AllowAsync(callerId, now);
             _productionService.PerformRequest(callerId, now);
 
             return Ok(new { message = "Rate Limiter API is working!" });
         }
         catch (RateLimitException e)
         {
+            _productionService.PerformThrottledRequest(callerId, now);
+            
             _logger.LogError(e, "Rate limit exception occurred");
             return StatusCode(429, new { message = "Too Many Requests" });
         }
