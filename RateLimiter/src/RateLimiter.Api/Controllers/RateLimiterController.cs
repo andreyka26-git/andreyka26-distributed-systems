@@ -54,10 +54,5 @@ public class RateLimiterController : ControllerBase
             _logger.LogError(e, "Rate limit exception occurred");
             return StatusCode(429, new { message = "Too Many Requests" });
         }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "An error occurred");
-            return StatusCode(500, new { message = "Internal Server Error" });
-        }
     }
 } 

@@ -23,13 +23,8 @@ public class InMemoryRateLimiter : IRateLimiter
         
         var callerInfo = _callerRateLimits.GetOrAdd(callerId, new CallerInfo(callerId, requestTime));
 
-        if (requestTime - callerInfo.RateLimitBucketStart >= allowedTimeWindow)
-        {
-            //TODO add lock
-            callerInfo.ResetBucket(requestTime);
-        }
-        
         _logger.LogInformation($"Allowed request time: {requestTime}, requests done: {callerInfo.RequestsCount}, allowed: {rateLimitPerBucket}");
-        callerInfo.IncrementRequestCountSafe(rateLimitPerBucket);
+        // callerInfo.IncrementRequestCountSafe(rateLimitPerBucket, requestTime, allowedTimeWindow);
+        callerInfo.IncrementRequestCount(rateLimitPerBucket, requestTime, allowedTimeWindow);
     }
 }
