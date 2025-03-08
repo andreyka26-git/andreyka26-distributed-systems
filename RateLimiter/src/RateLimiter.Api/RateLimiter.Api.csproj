@@ -9,6 +9,9 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <Content Include="..\..\load-tests\k6tests.js">
+        <Link>k6tests.js</Link>
+      </Content>
       <Content Include="..\.dockerignore">
         <Link>.dockerignore</Link>
       </Content>

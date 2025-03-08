@@ -24,7 +24,7 @@ public class InMemoryRateLimiter : IRateLimiter
         var callerInfo = _callerRateLimits.GetOrAdd(callerId, new CallerInfo(callerId, requestTime));
 
         _logger.LogInformation($"Allowed request time: {requestTime}, requests done: {callerInfo.RequestsCount}, allowed: {rateLimitPerBucket}");
-        // callerInfo.IncrementRequestCountSafe(rateLimitPerBucket, requestTime, allowedTimeWindow);
-        callerInfo.IncrementRequestCount(rateLimitPerBucket, requestTime, allowedTimeWindow);
+        callerInfo.IncrementRequestCountSafe(rateLimitPerBucket, requestTime, allowedTimeWindow);
+        // callerInfo.IncrementRequestCount(rateLimitPerBucket, requestTime, allowedTimeWindow);
     }
 }
