@@ -13,7 +13,7 @@ export let options = {
 };
 
 export default function () {
-  let url = `http://localhost:80/rate-limiter?userId=user3`;
+  let url = `http://localhost:5000/rate-limiter?userId=user3`;
   let response = http.get(url);
 
   check(response, {
