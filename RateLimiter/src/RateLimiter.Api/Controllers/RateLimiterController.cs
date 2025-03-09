@@ -10,12 +10,12 @@ public class RateLimiterController : ControllerBase
 {
     private readonly ILogger<RateLimiterController> _logger;
     private readonly IRateLimiter _rateLimiter;
-    private readonly ProductionService _productionService;
+    private readonly IProductionService _productionService;
 
     public RateLimiterController(
         ILogger<RateLimiterController> logger,
         IRateLimiter rateLimiter,
-        ProductionService productionService)
+        IProductionService productionService)
     {
         _logger = logger;
         _rateLimiter = rateLimiter;
@@ -25,7 +25,7 @@ public class RateLimiterController : ControllerBase
     [HttpGet("snapshot")]
     public async Task<IActionResult> GetSnapshot()
     {
-       var requests = _productionService.GetSerializedRequests(); 
+       var requests = await _productionService.GetSerializedRequests(); 
        return Ok(requests);
     }
 
@@ -43,13 +43,13 @@ public class RateLimiterController : ControllerBase
         try
         {
             await _rateLimiter.AllowAsync(callerId, now);
-            _productionService.PerformRequest(callerId, now);
+            await _productionService.PerformRequest(callerId, now);
 
             return Ok(new { message = "Rate Limiter API is working!" });
         }
         catch (RateLimitException e)
         {
-            _productionService.PerformThrottledRequest(callerId, now);
+            await _productionService.PerformThrottledRequest(callerId, now);
             
             _logger.LogError(e, "Rate limit exception occurred");
             return StatusCode(429, new { message = "Too Many Requests" });

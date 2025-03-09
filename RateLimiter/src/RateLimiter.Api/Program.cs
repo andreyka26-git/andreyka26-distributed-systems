@@ -11,12 +11,20 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-var redis = ConnectionMultiplexer.Connect("redis:6379");
-builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
-builder.Services.AddSingleton<IRateLimiter, RedisBasedRateLimiter>();
+var redisBased = true;
 
-// builder.Services.AddSingleton<IRateLimiter, InMemoryRateLimiter>();
-builder.Services.AddSingleton<ProductionService>();
+if (redisBased)
+{
+    var redis = ConnectionMultiplexer.Connect("redis:6379");
+    builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
+    builder.Services.AddSingleton<IRateLimiter, RedisBasedRateLimiter>();
+    builder.Services.AddSingleton<IProductionService, RedisProductionService>();
+}
+else
+{
+    builder.Services.AddSingleton<IRateLimiter, InMemoryRateLimiter>();
+    builder.Services.AddSingleton<IProductionService, InMemoryProductionService>();
+}
 
 var app = builder.Build();
 

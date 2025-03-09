@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Threading;
+using RateLimiter.Api.Application;
 
 namespace RateLimiter.Api.Infrastructure;
 
@@ -11,7 +12,7 @@ public class AtomicCounter
     public int Increment() => Interlocked.Increment(ref _value);
 }
 
-public class ProductionService
+public class InMemoryProductionService : IProductionService
 {
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<long, (AtomicCounter Successful, AtomicCounter Unsuccessful)>> _requestsPerCaller = new();
 
@@ -40,7 +41,7 @@ public class ProductionService
         return Task.CompletedTask;
     }
 
-    public string GetSerializedRequests()
+    public async Task<string> GetSerializedRequests()
     {
         var result = new Dictionary<string, Dictionary<long, string>>();
 
