@@ -25,7 +25,7 @@ services:
           memory: 2G
     expose:
       - "80"  # This exposes the port internally to other services, not to the host
-    # scale: 3  # Number of replicas for scaling the service
+    scale: 5  # Number of replicas for scaling the service
 
   redis:
     image: "redis:alpine"

@@ -1,0 +1,6 @@
+@SnowFlakeAutoIncrement_HostAddress = http://localhost:5125
+
+GET {{SnowFlakeAutoIncrement_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

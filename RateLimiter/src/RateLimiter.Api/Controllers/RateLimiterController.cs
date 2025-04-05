@@ -10,23 +10,19 @@ public class RateLimiterController : ControllerBase
 {
     private readonly ILogger<RateLimiterController> _logger;
     private readonly IRateLimiter _rateLimiter;
-    private readonly IProductionService _productionService;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IConfiguration _configuration;
 
     public RateLimiterController(
         ILogger<RateLimiterController> logger,
         IRateLimiter rateLimiter,
-        IProductionService productionService)
+        IHttpClientFactory httpClientFactory,
+        IConfiguration configuration)
     {
         _logger = logger;
         _rateLimiter = rateLimiter;
-        _productionService = productionService;
-    }
-
-    [HttpGet("snapshot")]
-    public async Task<IActionResult> GetSnapshot()
-    {
-       var requests = await _productionService.GetSerializedRequests(); 
-       return Ok(requests);
+        _httpClientFactory = httpClientFactory;
+        _configuration = configuration;
     }
 
     [HttpGet]
@@ -40,19 +36,25 @@ public class RateLimiterController : ControllerBase
             callerId = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
         }
 
+        using var httpClient = _httpClientFactory.CreateClient();
+        var baseUrl = _configuration.GetValue<string>("ProductionServiceBaseUrl");
+        var throttled = false;
+
         try
         {
             await _rateLimiter.AllowAsync(callerId, now);
-            await _productionService.PerformRequest(callerId, now);
-
             return Ok(new { message = "Rate Limiter API is working!" });
         }
         catch (RateLimitException e)
         {
-            await _productionService.PerformThrottledRequest(callerId, now);
-            
+            throttled = true;
             _logger.LogError(e, "Rate limit exception occurred");
             return StatusCode(429, new { message = "Too Many Requests" });
+        }
+        finally
+        {
+            // not awaited intentionally
+            httpClient.PostAsync($"{baseUrl}/production-service/request?userId={callerId}&throttled={throttled}", null);
         }
     }
 } 

@@ -31,7 +31,7 @@ public class InMemoryProductionService : IProductionService
 
     public Task PerformThrottledRequest(string callerId, DateTime requestTime)
     {
-        long timestamp = new DateTimeOffset(requestTime).ToUnixTimeSeconds();
+        var timestamp = new DateTimeOffset(requestTime).ToUnixTimeSeconds();
 
         var perSecondCounter = _requestsPerCaller.GetOrAdd(callerId, _ => new ConcurrentDictionary<long, (AtomicCounter Successful, AtomicCounter Unsuccessful)>());
 
@@ -41,7 +41,7 @@ public class InMemoryProductionService : IProductionService
         return Task.CompletedTask;
     }
 
-    public async Task<string> GetSerializedRequests()
+    public Task<string> GetSerializedRequests()
     {
         var result = new Dictionary<string, Dictionary<long, string>>();
 
@@ -51,7 +51,6 @@ public class InMemoryProductionService : IProductionService
 
             foreach (var timestampStats in caller.Value)
             {
-                // Explicitly access the value of AtomicCounter and store them as ints
                 callerStats[timestampStats.Key] =
                     $"success: {timestampStats.Value.Successful.Value}, unsuccessful: {timestampStats.Value.Unsuccessful.Value}";
             }
@@ -59,6 +58,6 @@ public class InMemoryProductionService : IProductionService
             result[caller.Key] = callerStats;
         }
 
-        return JsonSerializer.Serialize(result);
+        return Task.FromResult(JsonSerializer.Serialize(result));
     }
 }
