@@ -1,0 +1,23 @@
+function jump(ind) {
+  if (ind >= len - 1) {
+    return true;
+  }
+
+  if (memo[ind] !== -1) {
+    return memo[ind];
+  }
+
+  let can = false;
+
+  for (let step = 1; step <= nums[ind]; step++) {
+    can |= jump(ind + step);
+
+    if (can) {
+      break;
+    }
+  }
+
+  memo[ind] = can;
+
+  return can;
+}

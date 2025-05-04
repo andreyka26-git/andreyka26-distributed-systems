@@ -48,42 +48,42 @@ app.MapGet("identifier", async (
                               $"Identifier: {identifier}");
 
         // TODO to be removed
-        Task.Run(async () =>
-        {
-            var db = redis.GetDatabase();
-            var key = $"{milliseconds}-{machineId}-{sequenceNumber}";
-            var newCount = await db.StringIncrementAsync(key);
-            logger.LogInformation($"Identifier {identifier} has been written {newCount} times.");
-        });
+        // Task.Run(async () =>
+        // {
+        //     var db = redis.GetDatabase();
+        //     var key = $"{milliseconds}-{machineId}-{sequenceNumber}";
+        //     var newCount = await db.StringIncrementAsync(key);
+        //     logger.LogInformation($"Identifier {identifier} has been written {newCount} times.");
+        // });
 
         return identifier;
     })
     .WithName("GetNewIdentifier")
     .WithOpenApi();
 
-app.MapGet("identifiers/used-more-than-once", async (
-        IConnectionMultiplexer redis,
-        ILogger<Program> logger) =>
-    {
-        var db = redis.GetDatabase();
-        var server = redis.GetServer("redis", 6379); // Assumes single node, no password
-
-        var result = new List<object>();
-
-        foreach (var key in server.Keys())
-        {
-            var value = await db.StringGetAsync(key);
-            if (value.HasValue && int.TryParse(value, out var count) && count > 1)
-            {
-                result.Add(new { Identifier = key.ToString(), Count = count });
-            }
-        }
-
-        logger.LogInformation($"Found {result.Count} identifiers with count > 1.");
-
-        return Results.Ok(result);
-    })
-    .WithName("GetIdentifiersUsedMoreThanOnce")
-    .WithOpenApi();
+// app.MapGet("identifiers/used-more-than-once", async (
+//         IConnectionMultiplexer redis,
+//         ILogger<Program> logger) =>
+//     {
+//         var db = redis.GetDatabase();
+//         var server = redis.GetServer("redis", 6379); // Assumes single node, no password
+//
+//         var result = new List<object>();
+//
+//         foreach (var key in server.Keys())
+//         {
+//             var value = await db.StringGetAsync(key);
+//             if (value.HasValue && int.TryParse(value, out var count) && count > 1)
+//             {
+//                 result.Add(new { Identifier = key.ToString(), Count = count });
+//             }
+//         }
+//
+//         logger.LogInformation($"Found {result.Count} identifiers with count > 1.");
+//
+//         return Results.Ok(result);
+//     })
+//     .WithName("GetIdentifiersUsedMoreThanOnce")
+//     .WithOpenApi();
 
 app.Run();
