@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+
   urlshortener-1:
     build:
       context: .
@@ -12,10 +13,22 @@ services:
     restart: always
     expose:
       - "80"  # This exposes the port internally to other services, not to the host
-    scale: 1 # Number of replicas for scaling the service
     mem_limit: 2g       # ✅ Enforces 2GB RAM limit
     cpus: 1.0
 
+  urlshortener-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - SnowflakeBaseUrl=http://loadbalancer
+    networks:
+      - system-design
+    restart: always
+    expose:
+      - "80"  # This exposes the port internally to other services, not to the host
+    mem_limit: 2g       # ✅ Enforces 2GB RAM limit
+    cpus: 1.0
 
   loadbalancer:
     image: nginx:latest

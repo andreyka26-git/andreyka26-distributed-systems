@@ -1,4 +1,5 @@
 using UrlShortener;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +10,11 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddHttpClient();
 builder.Services.AddTransient<UniqueIdClient>();
+builder.Services.AddSingleton<UrlShortenerService>();
+
+// Add Redis connection
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+    ConnectionMultiplexer.Connect("redis:6379"));
 
 var app = builder.Build();
 
@@ -19,22 +25,27 @@ app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapPost("/url", async (UniqueIdClient client) =>
+// POST http://localhost:5000/shortener/url
+app.MapPost("/url", async (ShortUrlRequest request, UniqueIdClient client, UrlShortenerService service) =>
     {
         var id = await client.GetUniqueIdAsync();
-        return id;
+        
+        var shortUrl = await service.CreateShortUrlAsync(id, request.TargetUrl);
+
+        return shortUrl;
     })
     .WithName("ShortUrl")
     .WithOpenApi();
 
-app.Run();
+// GET http://localhost:5000/shortener/pkIcYynZ
+app.MapGet("/url/{shortCode}", async (string shortCode, UrlShortenerService service) =>
+    {
+        var originalUrl = await service.GetOriginalUrlAsync(shortCode);
+        return originalUrl is not null
+            ? Results.Redirect(originalUrl)
+            : Results.NotFound("Short URL not found.");
+    })
+    .WithName("Redirect")
+    .WithOpenApi();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+app.Run();
