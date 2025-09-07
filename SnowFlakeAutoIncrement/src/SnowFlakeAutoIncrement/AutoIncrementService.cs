@@ -20,7 +20,7 @@ public class AutoIncrementService
 
    public static ulong GetMilliseconds(DateTime requestTime)
    {
-       return (ulong)(requestTime - Epoch).TotalMilliseconds;   
+       return (ulong)(requestTime - Epoch).TotalMilliseconds;
    }
 
    // TODO solve memory leak (older milliseconds are not erased)

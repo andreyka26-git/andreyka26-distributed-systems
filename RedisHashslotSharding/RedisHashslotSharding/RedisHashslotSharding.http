@@ -1,0 +1,6 @@
+@RedisHashslotSharding_HostAddress = http://localhost:5211
+
+GET {{RedisHashslotSharding_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
