@@ -1,4 +1,4 @@
-﻿namespace RedisHashslotSharding.Common;
+namespace RedisHashslotSharding.Domain;
 
 /// <summary>
 /// Local cache, therefore has cache values that can handle
@@ -7,5 +7,5 @@ public class LocalNode : NodeBase
 {
     public override bool IsNodeLocal() => true;
 
-    public Dictionary<int, InMemoryCache> LocalHashSlots { get; } = new();
+    public override Dictionary<int, InMemoryCache> LocalHashSlots { get; } = new();
 }

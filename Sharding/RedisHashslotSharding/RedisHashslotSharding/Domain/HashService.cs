@@ -1,5 +1,8 @@
-﻿namespace RedisHashslotSharding.Common;
+namespace RedisHashslotSharding.Domain;
 
+/// <summary>
+/// Service for computing hash slots using CRC32 algorithm
+/// </summary>
 public class HashService
 {
     // 2 ^ 14
