@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-hashslot-sharding-deployment
+  namespace: redis-hashslot-sharding
+  labels:
+    app: redis-hashslot-sharding
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: redis-hashslot-sharding
+  template:
+    metadata:
+      labels:
+        app: redis-hashslot-sharding
+    spec:
+      containers:
+      - name: redis-hashslot-sharding
+        image: redis-hashslot-sharding:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: redis-hashslot-config
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5

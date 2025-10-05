@@ -95,4 +95,10 @@ app.MapPost("/initialize/{nodeId}", async (Server server, string nodeId) =>
         });
     });
 
+// Health check endpoint for Kubernetes probes
+app.MapGet("/health", () => 
+    {
+        return Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
+    });
+
 app.Run();

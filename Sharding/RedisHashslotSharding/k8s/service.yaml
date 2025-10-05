@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-hashslot-sharding-service
+  namespace: redis-hashslot-sharding
+  labels:
+    app: redis-hashslot-sharding
+spec:
+  type: ClusterIP  # Changed from LoadBalancer for local development
+  selector:
+    app: redis-hashslot-sharding
+  ports:
+  - port: 80
+    targetPort: 5000
+    protocol: TCP
+    name: http
