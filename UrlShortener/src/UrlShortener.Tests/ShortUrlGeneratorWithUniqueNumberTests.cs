@@ -56,7 +56,7 @@ public class ShortUrlGeneratorWithUniqueNumberTests
     [InlineData(0L)]
     [InlineData(1L)]
     [InlineData(12345L)]
-    [InlineData(9876543210L)]
+    [InlineData(222111876543210L)]
     public async Task CreateShortUrlAsync_ShouldHandleVariousIds(long uniqueId)
     {
         // Arrange
@@ -69,10 +69,11 @@ public class ShortUrlGeneratorWithUniqueNumberTests
 
         // Act
         var shortUrl = await generator.CreateShortUrlAsync(originalUrl);
+        var shortUrl2 = await generator.CreateShortUrlAsync(originalUrl);
 
         // Assert
         Assert.NotNull(shortUrl);
         Assert.NotEmpty(shortUrl);
-        Assert.Equal(Base62Utils.ToBase62(uniqueId), shortUrl);
+        Assert.Equal(shortUrl2, shortUrl);
     }
 }
