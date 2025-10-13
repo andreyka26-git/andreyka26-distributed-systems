@@ -1,6 +1,6 @@
 ﻿namespace UrlShortener;
 
-public class UniqueIdClient
+public class UniqueIdClient : IUniqueIdClient
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _config;

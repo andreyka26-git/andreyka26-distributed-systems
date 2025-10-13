@@ -1,4 +1,5 @@
 using UrlShortener;
+using UrlShortener.ShortUrlGeneration;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,7 +10,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddHttpClient();
-builder.Services.AddTransient<UniqueIdClient>();
+builder.Services.AddTransient<IUniqueIdClient, UniqueIdClient>();
+builder.Services.AddTransient<IShortUrlGeneratorFactory, ShortUrlGeneratorFactory>();
 builder.Services.AddSingleton<UrlShortenerService>();
 
 // Add Redis connection
@@ -26,12 +28,9 @@ app.UseSwaggerUI();
 app.UseHttpsRedirection();
 
 // POST http://localhost:5000/shortener/url
-app.MapPost("/url", async (ShortUrlRequest request, UniqueIdClient client, UrlShortenerService service) =>
+app.MapPost("/url", async (ShortUrlRequest request, UrlShortenerService service) =>
     {
-        var id = await client.GetUniqueIdAsync();
-        
-        var shortUrl = await service.CreateShortUrlAsync(id, request.TargetUrl);
-
+        var shortUrl = await service.CreateShortUrlAsync(request.TargetUrl);
         return shortUrl;
     })
     .WithName("ShortUrl")
