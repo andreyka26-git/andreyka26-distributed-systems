@@ -9,6 +9,7 @@ const STATISTICS_API_URL = process.env.STATISTICS_API_URL || 'http://localhost:5
 const READER_API_URLS = process.env.READER_API_URLS 
   ? process.env.READER_API_URLS.split(',') 
   : ['http://localhost:4001', 'http://localhost:4002', 'http://localhost:4003'];
+const COMMENT_INTERVAL = parseInt(process.env.COMMENT_INTERVAL || '10000', 10);
 
 let eventSource = null;
 let currentReaderIndex = 0;
@@ -114,16 +115,17 @@ async function postComment() {
 }
 
 async function start() {
-  console.log(`[${CLIENT_ID}] Starting client for user ${USER_ID} watching video ${VIDEO_ID}`);
+  console.log(`[${CLIENT_ID}] Starting client for user ${USER_ID} watching video ${VIDEO_ID} (comment interval: ${COMMENT_INTERVAL}ms)`);
   
   // Connect to reader API
   await connectToReader();
 
-  // Post comments every 10 seconds
-  setInterval(postComment, 10000);
+  // Post comments based on configured interval
+  setInterval(postComment, COMMENT_INTERVAL);
 
-  // Post first comment after 5 seconds
-  setTimeout(postComment, 5000);
+  // Post first comment after random delay (to spread the load)
+  const firstCommentDelay = Math.floor(Math.random() * Math.min(COMMENT_INTERVAL, 30000));
+  setTimeout(postComment, firstCommentDelay);
 
   // Send statistics every 5 seconds
   setInterval(sendStatistics, 5000);

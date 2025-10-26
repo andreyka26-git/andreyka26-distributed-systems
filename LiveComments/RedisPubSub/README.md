@@ -1,9 +1,32 @@
 # Real-Time Comments POC with Redis Pub/Sub
 
-Bad solution in case there are too many videos. Too heavy videos (celebrity problem) is out of scope here.
-Since users are going to random "reader" service. In the end it can happen, that every reader API can be overwhelmed with so many comments processed by redis publisher.
+The objective: Simulate the flaws of this approach in System Designs
+
+Bad fit in case there are too many videos. Too heavy videos (celebrity problem) is out of scope here.
+Since users are going to random "reader" service. In the end every reader API is subscribed to ALL the topics and will not be able to catch up with every update
 
 A proof-of-concept implementation of a real-time commenting system (FB live comments) using Node.js, Redis Pub/Sub, and Server-Sent Events (SSE).
+
+The data from Chat GPT:
+- Twitch 95k concurrent live streams, 2M concurrent viewers => 25 per video/stream
+- Youtube 6M concurrent viewers, no concurrent live streams.
+- TikTok, 400k Daily
+
+^^ I would say the fair would be to use 90k concurrent live streams with around 2M viewers.
+
+## Scale Simulation
+
+To demonstrate the architecture flaw at scale (200 videos, 5000 viewers), use the efficient simulator:
+
+```bash
+docker-compose -f docker-compose-simulator.yml up
+```
+
+This runs **5 Reader APIs** and simulates **5000 viewers** watching **200 videos** in a single client container.
+
+**Key finding**: Each Reader API subscribes to ALL ~200 video topics, creating ~1000 total Redis subscriptions instead of the optimal ~200.
+
+See **[SIMULATION.md](SIMULATION.md)** for detailed analysis and configuration options.
 
 ## Architecture
 
