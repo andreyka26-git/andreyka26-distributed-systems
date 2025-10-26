@@ -9,17 +9,14 @@ const STATISTICS_API_URL = process.env.STATISTICS_API_URL || 'http://localhost:5
 const READER_API_URLS = process.env.READER_API_URLS 
   ? process.env.READER_API_URLS.split(',') 
   : ['http://localhost:4001', 'http://localhost:4002', 'http://localhost:4003'];
-const COMMENT_INTERVAL = parseInt(process.env.COMMENT_INTERVAL || '10000', 10);
 
 let eventSource = null;
 let currentReaderIndex = 0;
 let connectedReader = null;
 
-// Client statistics
 let commentsGenerated = 0;
 let commentsConsumed = 0;
 
-// Send statistics to Statistics API
 async function sendStatistics() {
   try {
     await axios.post(`${STATISTICS_API_URL}/client-statistics`, {
@@ -37,9 +34,7 @@ async function sendStatistics() {
   }
 }
 
-// Connect to a random Reader API for SSE
 async function connectToReader() {
-  // Select random reader API (or round-robin on reconnect)
   const readerUrl = READER_API_URLS[currentReaderIndex % READER_API_URLS.length];
   currentReaderIndex++;
   connectedReader = readerUrl;
@@ -47,7 +42,6 @@ async function connectToReader() {
   console.log(`[${CLIENT_ID}] Connecting to ${readerUrl} for video ${VIDEO_ID}`);
 
   try {
-    // First, establish the SSE connection by calling POST /connect
     const response = await axios.post(`${readerUrl}/connect`, {
       userid: USER_ID,
       videoid: VIDEO_ID
@@ -97,7 +91,6 @@ async function connectToReader() {
   }
 }
 
-// Post a comment periodically
 async function postComment() {
   const comment = `Hello from ${CLIENT_ID} at ${new Date().toISOString()}`;
   
@@ -115,22 +108,13 @@ async function postComment() {
 }
 
 async function start() {
-  console.log(`[${CLIENT_ID}] Starting client for user ${USER_ID} watching video ${VIDEO_ID} (comment interval: ${COMMENT_INTERVAL}ms)`);
+  console.log(`[${CLIENT_ID}] Starting client for user ${USER_ID} watching video ${VIDEO_ID}`);
   
-  // Connect to reader API
   await connectToReader();
 
-  // Post comments based on configured interval
-  setInterval(postComment, COMMENT_INTERVAL);
-
-  // Post first comment after random delay (to spread the load)
-  const firstCommentDelay = Math.floor(Math.random() * Math.min(COMMENT_INTERVAL, 30000));
-  setTimeout(postComment, firstCommentDelay);
-
-  // Send statistics every 5 seconds
+  setInterval(postComment, 10000);
   setInterval(sendStatistics, 5000);
-
-  // Send initial statistics after 2 seconds
+  
   setTimeout(sendStatistics, 2000);
 }
 

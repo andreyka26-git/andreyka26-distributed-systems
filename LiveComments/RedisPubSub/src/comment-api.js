@@ -48,6 +48,20 @@ app.post('/comment', async (req, res) => {
 
   console.log(`New comment from user ${userid} on video ${videoid}: ${comment}`);
 
+  // Store comment in Redis as a hashset
+  try {
+    const commentId = `comment:${videoid}:${Date.now()}:${userid}`;
+    await redisPublisher.hSet(commentId, {
+      userid: userid,
+      videoid: videoid,
+      comment: comment,
+      timestamp: commentData.timestamp
+    });
+    console.log(`Stored comment in Redis hashset: ${commentId}`);
+  } catch (err) {
+    console.error('Error storing comment in Redis:', err);
+  }
+
   // Publish to Redis Pub/Sub
   try {
     await redisPublisher.publish(`video:${videoid}`, JSON.stringify(commentData));

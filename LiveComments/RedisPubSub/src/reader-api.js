@@ -10,11 +10,9 @@ const INSTANCE_ID = process.env.INSTANCE_ID || 'reader-1';
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const STATISTICS_API_URL = process.env.STATISTICS_API_URL || 'http://localhost:5000';
 
-// Track active connections per video
 const connections = {};
 const subscribedTopics = new Set();
 
-// Statistics tracking
 let messagesSent = 0;
 
 let redisSubscriber;
@@ -25,7 +23,6 @@ async function initRedis() {
   await redisSubscriber.connect();
   console.log('Connected to Redis');
 
-  // Handle incoming messages
   redisSubscriber.on('message', (channel, message) => {
     console.log(`[${INSTANCE_ID}] Received message on ${channel}`);
     const videoId = channel.replace('video:', '');
@@ -60,26 +57,6 @@ async function subscribeToVideo(videoid) {
   }
 }
 
-// Send statistics to Statistics API
-async function sendStatistics() {
-  try {
-    // Calculate active connections
-    let totalConnections = 0;
-    for (const videoConnections of Object.values(connections)) {
-      totalConnections += videoConnections.length;
-    }
-
-    await axios.post(`${STATISTICS_API_URL}/reader-api-statistics`, {
-      instanceId: INSTANCE_ID,
-      activeConnections: totalConnections,
-      subscribedTopics: Array.from(subscribedTopics),
-      messagesSent
-    });
-    console.log(`[${INSTANCE_ID}] 📊 Sent statistics: connections=${totalConnections}, messages=${messagesSent}, topics=${subscribedTopics.size}`);
-  } catch (err) {
-    console.error(`[${INSTANCE_ID}] Error sending statistics:`, err.message);
-  }
-}
 
 app.post('/connect', async (req, res) => {
   const { userid, videoid } = req.body;
@@ -130,6 +107,27 @@ app.get('/health', (req, res) => {
     subscribedTopics: Array.from(subscribedTopics)
   });
 });
+
+// Send statistics to Statistics API
+async function sendStatistics() {
+  try {
+    // Calculate active connections
+    let totalConnections = 0;
+    for (const videoConnections of Object.values(connections)) {
+      totalConnections += videoConnections.length;
+    }
+
+    await axios.post(`${STATISTICS_API_URL}/reader-api-statistics`, {
+      instanceId: INSTANCE_ID,
+      activeConnections: totalConnections,
+      subscribedTopics: Array.from(subscribedTopics),
+      messagesSent
+    });
+    console.log(`[${INSTANCE_ID}] 📊 Sent statistics: connections=${totalConnections}, messages=${messagesSent}, topics=${subscribedTopics.size}`);
+  } catch (err) {
+    console.error(`[${INSTANCE_ID}] Error sending statistics:`, err.message);
+  }
+}
 
 async function start() {
   await initRedis();

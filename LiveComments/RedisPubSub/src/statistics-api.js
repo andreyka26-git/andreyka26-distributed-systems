@@ -1,14 +1,26 @@
 const express = require('express');
+const redis = require('redis');
 
 const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
+const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 
 // In-memory storage for all statistics
 const commentApiStats = {};
 const readerApiStats = {};
 const clientStats = {};
+
+// Redis client
+let redisClient;
+
+async function initRedis() {
+  redisClient = redis.createClient({ url: `redis://${REDIS_HOST}:6379` });
+  redisClient.on('error', (err) => console.error('Redis Client Error', err));
+  await redisClient.connect();
+  console.log('Connected to Redis');
+}
 
 // Comment API statistics
 app.post('/comment-api-statistics', (req, res) => {
@@ -70,7 +82,7 @@ app.post('/client-statistics', (req, res) => {
 });
 
 // Get all statistics
-app.get('/statistics', (req, res) => {
+app.get('/statistics', async (req, res) => {
   // Process reader API stats
   const readers = Object.values(readerApiStats);
   const totalReaders = readers.length;
@@ -83,6 +95,26 @@ app.get('/statistics', (req, res) => {
   const totalClients = clients.length;
   const totalCommentsGenerated = clients.reduce((sum, client) => sum + client.commentsGenerated, 0);
   const totalCommentsConsumed = clients.reduce((sum, client) => sum + client.commentsConsumed, 0);
+
+  // Retrieve all comments from Redis
+  let allComments = [];
+  try {
+    const keys = await redisClient.keys('comment:*');
+    
+    for (const key of keys) {
+      const commentData = await redisClient.hGetAll(key);
+      if (commentData && Object.keys(commentData).length > 0) {
+        allComments.push({
+          id: key,
+          ...commentData
+        });
+      }
+    }
+    
+    console.log(`Retrieved ${allComments.length} comments from Redis`);
+  } catch (err) {
+    console.error('Error retrieving comments from Redis:', err);
+  }
 
   res.json({
     commentApi: commentApiStats.data || {},
@@ -99,6 +131,10 @@ app.get('/statistics', (req, res) => {
       totalCommentsConsumed,
       clients
     },
+    storedComments: {
+      total: allComments.length,
+      comments: allComments
+    },
     timestamp: new Date().toISOString()
   });
 });
@@ -107,6 +143,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'statistics-api' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Statistics API listening on port ${PORT}`);
-});
+async function start() {
+  await initRedis();
+  app.listen(PORT, () => {
+    console.log(`Statistics API listening on port ${PORT}`);
+  });
+}
+
+start();
