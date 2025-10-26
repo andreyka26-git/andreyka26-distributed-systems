@@ -1,0 +1,159 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - comments-network
+
+  statistics-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node src/statistics-api.js
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+    networks:
+      - comments-network
+
+  comment-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node src/comment-api.js
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - REDIS_HOST=redis
+      - STATISTICS_API_URL=http://statistics-api:5000
+    depends_on:
+      - redis
+      - statistics-api
+    networks:
+      - comments-network
+
+  reader-api-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node src/reader-api.js
+    ports:
+      - "4001:4000"
+    environment:
+      - PORT=4000
+      - INSTANCE_ID=reader-api-1
+      - REDIS_HOST=redis
+      - STATISTICS_API_URL=http://statistics-api:5000
+    depends_on:
+      - redis
+      - statistics-api
+    networks:
+      - comments-network
+
+  reader-api-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node src/reader-api.js
+    ports:
+      - "4002:4000"
+    environment:
+      - PORT=4000
+      - INSTANCE_ID=reader-api-2
+      - REDIS_HOST=redis
+      - STATISTICS_API_URL=http://statistics-api:5000
+    depends_on:
+      - redis
+      - statistics-api
+    networks:
+      - comments-network
+
+  reader-api-3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node src/reader-api.js
+    ports:
+      - "4003:4000"
+    environment:
+      - PORT=4000
+      - INSTANCE_ID=reader-api-3
+      - REDIS_HOST=redis
+      - STATISTICS_API_URL=http://statistics-api:5000
+    depends_on:
+      - redis
+      - statistics-api
+    networks:
+      - comments-network
+
+  client-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node src/client.js
+    environment:
+      - CLIENT_ID=client-1
+      - USER_ID=user1
+      - VIDEO_ID=video1
+      - COMMENT_API_URL=http://comment-api:3000
+      - STATISTICS_API_URL=http://statistics-api:5000
+      - READER_API_URLS=http://reader-api-1:4000,http://reader-api-2:4000,http://reader-api-3:4000
+    depends_on:
+      - comment-api
+      - reader-api-1
+      - reader-api-2
+      - reader-api-3
+      - statistics-api
+    networks:
+      - comments-network
+
+  client-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node src/client.js
+    environment:
+      - CLIENT_ID=client-2
+      - USER_ID=user2
+      - VIDEO_ID=video2
+      - COMMENT_API_URL=http://comment-api:3000
+      - STATISTICS_API_URL=http://statistics-api:5000
+      - READER_API_URLS=http://reader-api-1:4000,http://reader-api-2:4000,http://reader-api-3:4000
+    depends_on:
+      - comment-api
+      - reader-api-1
+      - reader-api-2
+      - reader-api-3
+      - statistics-api
+    networks:
+      - comments-network
+
+  client-3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node src/client.js
+    environment:
+      - CLIENT_ID=client-3
+      - USER_ID=user3
+      - VIDEO_ID=video1
+      - COMMENT_API_URL=http://comment-api:3000
+      - STATISTICS_API_URL=http://statistics-api:5000
+      - READER_API_URLS=http://reader-api-1:4000,http://reader-api-2:4000,http://reader-api-3:4000
+    depends_on:
+      - comment-api
+      - reader-api-1
+      - reader-api-2
+      - reader-api-3
+      - statistics-api
+    networks:
+      - comments-network
+
+networks:
+  comments-network:
+    driver: bridge
