@@ -1,5 +1,4 @@
 const axios = require('axios');
-const EventSource = require('eventsource');
 
 const CLIENT_ID = process.env.CLIENT_ID || 'client-1';
 const USER_ID = process.env.USER_ID || 'user1';
@@ -10,10 +9,7 @@ const READER_API_URLS = process.env.READER_API_URLS
   ? process.env.READER_API_URLS.split(',') 
   : ['http://localhost:4001', 'http://localhost:4002', 'http://localhost:4003'];
 
-let eventSource = null;
-let currentReaderIndex = 0;
 let connectedReader = null;
-
 let commentsGenerated = 0;
 let commentsConsumed = 0;
 
@@ -28,15 +24,14 @@ async function sendStatistics() {
       subscribedTopics: [`video:${VIDEO_ID}`],
       connectedReader
     });
-    console.log(`[${CLIENT_ID}] 📊 Sent statistics: generated=${commentsGenerated}, consumed=${commentsConsumed}`);
+    console.log(`[${CLIENT_ID}] Sent statistics: generated=${commentsGenerated}, consumed=${commentsConsumed}`);
   } catch (err) {
     console.error(`[${CLIENT_ID}] Error sending statistics:`, err.message);
   }
 }
 
 async function connectToReader() {
-  const readerUrl = READER_API_URLS[currentReaderIndex % READER_API_URLS.length];
-  currentReaderIndex++;
+  const readerUrl = READER_API_URLS[Math.floor(Math.random() * READER_API_URLS.length)];
   connectedReader = readerUrl;
 
   console.log(`[${CLIENT_ID}] Connecting to ${readerUrl} for video ${VIDEO_ID}`);
@@ -51,36 +46,41 @@ async function connectToReader() {
 
     console.log(`[${CLIENT_ID}] Connected to ${readerUrl}`);
 
+    const handleMessage = (data) => {
+      try {
+        const message = JSON.parse(data);
+        if (message.type === 'connected') {
+          console.log(`[${CLIENT_ID}] Connection confirmed: ${JSON.stringify(message)}`);
+        } else {
+          commentsConsumed++;
+          console.log(`[${CLIENT_ID}] New comment received:`, message);
+        }
+      } catch (e) {
+        console.log(`[${CLIENT_ID}] Received:`, data);
+      }
+    };
+
+    const reconnect = () => {
+      connectedReader = null;
+      setTimeout(connectToReader, 2000);
+    };
+
     response.data.on('data', (chunk) => {
-      const lines = chunk.toString().split('\n');
-      lines.forEach(line => {
+      chunk.toString().split('\n').forEach(line => {
         if (line.startsWith('data: ')) {
-          const data = line.substring(6);
-          try {
-            const message = JSON.parse(data);
-            if (message.type === 'connected') {
-              console.log(`[${CLIENT_ID}] Connection confirmed: ${JSON.stringify(message)}`);
-            } else {
-              commentsConsumed++;
-              console.log(`[${CLIENT_ID}] 📩 New comment received:`, message);
-            }
-          } catch (e) {
-            console.log(`[${CLIENT_ID}] Received:`, data);
-          }
+          handleMessage(line.substring(6));
         }
       });
     });
 
     response.data.on('end', () => {
       console.log(`[${CLIENT_ID}] Connection closed. Reconnecting...`);
-      connectedReader = null;
-      setTimeout(connectToReader, 2000);
+      reconnect();
     });
 
     response.data.on('error', (err) => {
       console.error(`[${CLIENT_ID}] Stream error:`, err.message);
-      connectedReader = null;
-      setTimeout(connectToReader, 2000);
+      reconnect();
     });
 
   } catch (err) {
@@ -101,7 +101,7 @@ async function postComment() {
       comment
     });
     commentsGenerated++;
-    console.log(`[${CLIENT_ID}] 📝 Posted comment:`, comment);
+    console.log(`[${CLIENT_ID}] Posted comment:`, comment);
   } catch (err) {
     console.error(`[${CLIENT_ID}] Error posting comment:`, err.message);
   }

@@ -7,12 +7,10 @@ app.use(express.json());
 const PORT = process.env.PORT || 5000;
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 
-// In-memory storage for all statistics
 const commentApiStats = {};
 const readerApiStats = {};
 const clientStats = {};
 
-// Redis client
 let redisClient;
 
 async function initRedis() {
@@ -22,7 +20,6 @@ async function initRedis() {
   console.log('Connected to Redis');
 }
 
-// Comment API statistics
 app.post('/comment-api-statistics', (req, res) => {
   const { totalComments, commentsByVideo, activeTopics, topicSubscribers } = req.body;
 
@@ -38,7 +35,6 @@ app.post('/comment-api-statistics', (req, res) => {
   res.status(200).json({ success: true });
 });
 
-// Reader API statistics
 app.post('/reader-api-statistics', (req, res) => {
   const { instanceId, activeConnections, subscribedTopics, messagesSent } = req.body;
 
@@ -58,7 +54,6 @@ app.post('/reader-api-statistics', (req, res) => {
   res.status(200).json({ success: true });
 });
 
-// Client statistics
 app.post('/client-statistics', (req, res) => {
   const { clientId, userId, videoId, commentsGenerated, commentsConsumed, subscribedTopics, connectedReader } = req.body;
 
@@ -81,33 +76,18 @@ app.post('/client-statistics', (req, res) => {
   res.status(200).json({ success: true });
 });
 
-// Get all statistics
 app.get('/statistics', async (req, res) => {
-  // Process reader API stats
   const readers = Object.values(readerApiStats);
-  const totalReaders = readers.length;
-  const totalActiveConnections = readers.reduce((sum, reader) => sum + reader.activeConnections, 0);
-  const totalMessagesSent = readers.reduce((sum, reader) => sum + reader.messagesSent, 0);
-  const allReaderTopics = [...new Set(readers.flatMap(reader => reader.subscribedTopics))];
-
-  // Process client stats
   const clients = Object.values(clientStats);
-  const totalClients = clients.length;
-  const totalCommentsGenerated = clients.reduce((sum, client) => sum + client.commentsGenerated, 0);
-  const totalCommentsConsumed = clients.reduce((sum, client) => sum + client.commentsConsumed, 0);
 
-  // Retrieve all comments from Redis
-  let allComments = [];
+  const allComments = [];
   try {
     const keys = await redisClient.keys('comment:*');
     
     for (const key of keys) {
       const commentData = await redisClient.hGetAll(key);
       if (commentData && Object.keys(commentData).length > 0) {
-        allComments.push({
-          id: key,
-          ...commentData
-        });
+        allComments.push({ id: key, ...commentData });
       }
     }
     
@@ -119,16 +99,16 @@ app.get('/statistics', async (req, res) => {
   res.json({
     commentApi: commentApiStats.data || {},
     readerApis: {
-      totalReaders,
-      totalActiveConnections,
-      totalMessagesSent,
-      allSubscribedTopics: allReaderTopics,
+      totalReaders: readers.length,
+      totalActiveConnections: readers.reduce((sum, r) => sum + r.activeConnections, 0),
+      totalMessagesSent: readers.reduce((sum, r) => sum + r.messagesSent, 0),
+      allSubscribedTopics: [...new Set(readers.flatMap(r => r.subscribedTopics))],
       readers
     },
     clients: {
-      totalClients,
-      totalCommentsGenerated,
-      totalCommentsConsumed,
+      totalClients: clients.length,
+      totalCommentsGenerated: clients.reduce((sum, c) => sum + c.commentsGenerated, 0),
+      totalCommentsConsumed: clients.reduce((sum, c) => sum + c.commentsConsumed, 0),
       clients
     },
     storedComments: {

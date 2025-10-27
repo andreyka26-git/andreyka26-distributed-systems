@@ -39,24 +39,25 @@ async function initRedis() {
 async function subscribeToVideo(videoid) {
   const topic = `video:${videoid}`;
   
-  if (!subscribedTopics.has(topic)) {
-    await redisSubscriber.subscribe(topic, (message) => {
-      console.log(`[${INSTANCE_ID}] Message on ${topic}: ${message}`);
-      
-      if (connections[videoid]) {
-        connections[videoid].forEach(client => {
-          client.write(`data: ${message}\n\n`);
-          messagesSent++;
-        });
-        console.log(`[${INSTANCE_ID}] Sent to ${connections[videoid].length} clients`);
-      }
-    });
-    
-    subscribedTopics.add(topic);
-    console.log(`[${INSTANCE_ID}] Subscribed to ${topic}`);
+  if (subscribedTopics.has(topic)) {
+    return;
   }
-}
 
+  await redisSubscriber.subscribe(topic, (message) => {
+    console.log(`[${INSTANCE_ID}] Message on ${topic}: ${message}`);
+    
+    if (connections[videoid]) {
+      connections[videoid].forEach(client => {
+        client.write(`data: ${message}\n\n`);
+        messagesSent++;
+      });
+      console.log(`[${INSTANCE_ID}] Sent to ${connections[videoid].length} clients`);
+    }
+  });
+  
+  subscribedTopics.add(topic);
+  console.log(`[${INSTANCE_ID}] Subscribed to ${topic}`);
+}
 
 app.post('/connect', async (req, res) => {
   const { userid, videoid } = req.body;
@@ -67,15 +68,12 @@ app.post('/connect', async (req, res) => {
 
   console.log(`[${INSTANCE_ID}] New connection request: user ${userid} for video ${videoid}`);
 
-  // Set up SSE
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  // Send initial connection message
   res.write(`data: ${JSON.stringify({ type: 'connected', userid, videoid, instance: INSTANCE_ID })}\n\n`);
 
-  // Track connection
   if (!connections[videoid]) {
     connections[videoid] = [];
     await subscribeToVideo(videoid);
@@ -84,7 +82,6 @@ app.post('/connect', async (req, res) => {
 
   console.log(`[${INSTANCE_ID}] Active connections for video ${videoid}: ${connections[videoid].length}`);
 
-  // Handle client disconnect
   req.on('close', () => {
     console.log(`[${INSTANCE_ID}] Client disconnected: user ${userid} from video ${videoid}`);
     if (connections[videoid]) {
@@ -108,14 +105,9 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Send statistics to Statistics API
 async function sendStatistics() {
   try {
-    // Calculate active connections
-    let totalConnections = 0;
-    for (const videoConnections of Object.values(connections)) {
-      totalConnections += videoConnections.length;
-    }
+    const totalConnections = Object.values(connections).reduce((sum, conns) => sum + conns.length, 0);
 
     await axios.post(`${STATISTICS_API_URL}/reader-api-statistics`, {
       instanceId: INSTANCE_ID,
@@ -123,7 +115,7 @@ async function sendStatistics() {
       subscribedTopics: Array.from(subscribedTopics),
       messagesSent
     });
-    console.log(`[${INSTANCE_ID}] 📊 Sent statistics: connections=${totalConnections}, messages=${messagesSent}, topics=${subscribedTopics.size}`);
+    console.log(`[${INSTANCE_ID}] Sent statistics: connections=${totalConnections}, messages=${messagesSent}, topics=${subscribedTopics.size}`);
   } catch (err) {
     console.error(`[${INSTANCE_ID}] Error sending statistics:`, err.message);
   }
@@ -135,10 +127,7 @@ async function start() {
     console.log(`[${INSTANCE_ID}] Reader API listening on port ${PORT}`);
   });
 
-  // Send statistics every 5 seconds
   setInterval(sendStatistics, 5000);
-
-  // Send initial statistics after 3 seconds
   setTimeout(sendStatistics, 3000);
 }
 
