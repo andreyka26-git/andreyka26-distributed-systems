@@ -74,11 +74,17 @@ app.post('/connect', async (req, res) => {
 
   res.write(`data: ${JSON.stringify({ type: 'connected', userid, videoid, instance: INSTANCE_ID })}\n\n`);
 
+  // Initialize connections array first to avoid race condition
   if (!connections[videoid]) {
     connections[videoid] = [];
+  }
+  
+  connections[videoid].push(res);
+
+  // Subscribe to topic after adding connection
+  if (connections[videoid].length === 1) {
     await subscribeToVideo(videoid);
   }
-  connections[videoid].push(res);
 
   console.log(`[${INSTANCE_ID}] Active connections for video ${videoid}: ${connections[videoid].length}`);
 
