@@ -18,6 +18,15 @@ const CLIENT_CONFIGS = [
   { clientId: 'client-8', userId: 'user8', videoId: 'video3' },
   { clientId: 'client-9', userId: 'user9', videoId: 'video3' },
   { clientId: 'client-10', userId: 'user10', videoId: 'video3' },
+  { clientId: 'client-11', userId: 'user11', videoId: 'video3' },
+  { clientId: 'client-12', userId: 'user12', videoId: 'video3' },
+  { clientId: 'client-13', userId: 'user13', videoId: 'video3' },
+  { clientId: 'client-14', userId: 'user14', videoId: 'video3' },
+  { clientId: 'client-15', userId: 'user15', videoId: 'video3' },
+  { clientId: 'client-16', userId: 'user16', videoId: 'video3' },
+  { clientId: 'client-17', userId: 'user17', videoId: 'video4' },
+  { clientId: 'client-18', userId: 'user18', videoId: 'video5' },
+  { clientId: 'client-19', userId: 'user19', videoId: 'video6' },
 ];
 
 class Client {
