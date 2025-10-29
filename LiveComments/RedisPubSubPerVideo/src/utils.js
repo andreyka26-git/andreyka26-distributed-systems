@@ -86,6 +86,12 @@ class StatisticsUtils {
     const readers = Object.values(readerApiStats);
     const clients = Object.values(clientStats);
 
+    // Sort comments by timestamp (newest first) and take only the latest 10
+    const sortedComments = allComments
+      .filter(comment => comment.timestamp) // Only include comments with timestamps
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)) // Sort by timestamp descending
+      .slice(0, 10); // Take only the latest 10
+
     const result = {
       commentApi: commentApiStats.data || {},
       readerApis: {
@@ -103,7 +109,8 @@ class StatisticsUtils {
       },
       storedComments: {
         total: allComments.length,
-        comments: allComments
+        latestComments: sortedComments, // Show only the 10 latest comments
+        showing: `${sortedComments.length} of ${allComments.length} latest comments`
       },
       timestamp: new Date().toISOString()
     };

@@ -5,7 +5,7 @@
  * 100 concurrent videos/streams, 2500 concurrent viewers
  */
 
-const { SimulationUtils } = require('../utils');
+const { SimulationUtils } = require('../src/utils');
 
 const NUM_VIDEOS = 100;
 const TOTAL_VIDEOS = NUM_VIDEOS;
