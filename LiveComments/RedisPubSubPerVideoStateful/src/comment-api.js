@@ -1,7 +1,7 @@
 const express = require('express');
 const redis = require('redis');
 const axios = require('axios');
-const { StatisticsUtils } = require('../utils');
+const { StatisticsUtils } = require('./utils');
 
 const app = express();
 app.use(express.json());

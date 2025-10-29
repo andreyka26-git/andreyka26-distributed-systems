@@ -7,11 +7,6 @@ services:
       - "6379:6379"
     networks:
       - comments-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
 
   statistics-api:
     build:
@@ -24,8 +19,7 @@ services:
       - PORT=5000
       - REDIS_HOST=redis
     depends_on:
-      redis:
-        condition: service_healthy
+      - redis
     networks:
       - comments-network
 
@@ -41,10 +35,8 @@ services:
       - REDIS_HOST=redis
       - STATISTICS_API_URL=http://statistics-api:5000
     depends_on:
-      redis:
-        condition: service_healthy
-      statistics-api:
-        condition: service_started
+      - redis
+      - statistics-api
     networks:
       - comments-network
 
@@ -61,10 +53,8 @@ services:
       - REDIS_HOST=redis
       - STATISTICS_API_URL=http://statistics-api:5000
     depends_on:
-      redis:
-        condition: service_healthy
-      statistics-api:
-        condition: service_started
+      - redis
+      - statistics-api
     networks:
       - comments-network
 
@@ -81,10 +71,8 @@ services:
       - REDIS_HOST=redis
       - STATISTICS_API_URL=http://statistics-api:5000
     depends_on:
-      redis:
-        condition: service_healthy
-      statistics-api:
-        condition: service_started
+      - redis
+      - statistics-api
     networks:
       - comments-network
 

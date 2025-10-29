@@ -1,38 +1,18 @@
 const axios = require('axios');
 
-// ====================================================================
-// STATISTICS UTILITIES SECTION
-// ====================================================================
 
-/**
- * Utility class for handling statistics operations
- */
 class StatisticsUtils {
-  /**
-   * Send statistics to the statistics API
-   * @param {string} statisticsApiUrl - The base URL of the statistics API
-   * @param {string} endpoint - The specific endpoint to send to
-   * @param {Object} data - The data to send
-   * @param {string} logPrefix - Prefix for log messages
-   */
+
   static async sendStatistics(statisticsApiUrl, endpoint, data, logPrefix = '') {
     try {
       await axios.post(`${statisticsApiUrl}${endpoint}`, data);
       
-      // Generate a descriptive log message based on the data content
       const logMessage = StatisticsUtils.generateLogMessage(data, endpoint);
-      console.log(`${logPrefix} Sent statistics to ${endpoint}: ${logMessage}`);
     } catch (err) {
       console.error(`${logPrefix} Error sending statistics to ${endpoint}:`, err.message);
     }
   }
 
-  /**
-   * Generate a descriptive log message based on statistics data
-   * @param {Object} data - The statistics data
-   * @param {string} endpoint - The endpoint being sent to
-   * @returns {string} Formatted log message
-   */
   static generateLogMessage(data, endpoint) {
     if (endpoint.includes('comment-api')) {
       return `${data.totalComments || 0} comments, ${(data.activeTopics || []).length} topics`;
@@ -46,12 +26,6 @@ class StatisticsUtils {
     return 'data sent';
   }
 
-  /**
-   * Aggregate Redis pub/sub channel statistics
-   * @param {Object} redisClient - Redis client instance
-   * @param {string} pattern - Channel pattern to search for (e.g., 'video:*')
-   * @returns {Object} Object containing channels array and channelStats object
-   */
   static async aggregateChannelStatistics(redisClient, pattern = 'video:*') {
     try {
       const channels = await redisClient.sendCommand(['PUBSUB', 'CHANNELS', pattern]);
@@ -69,11 +43,6 @@ class StatisticsUtils {
     }
   }
 
-  /**
-   * Aggregate comments by video from a comments object
-   * @param {Object} comments - Comments object with videoid as keys
-   * @returns {Object} Object containing commentsByVideo and totalComments
-   */
   static aggregateCommentStatistics(comments) {
     const commentsByVideo = {};
     let totalComments = 0;
@@ -87,12 +56,6 @@ class StatisticsUtils {
     return { commentsByVideo, totalComments };
   }
 
-  /**
-   * Retrieve all comments from Redis
-   * @param {Object} redisClient - Redis client instance
-   * @param {string} pattern - Key pattern to search for (e.g., 'comment:*')
-   * @returns {Array} Array of comment objects
-   */
   static async retrieveCommentsFromRedis(redisClient, pattern = 'comment:*') {
     const allComments = [];
     try {
@@ -104,8 +67,6 @@ class StatisticsUtils {
           allComments.push({ id: key, ...commentData });
         }
       }
-      
-      console.log(`Retrieved ${allComments.length} comments from Redis`);
     } catch (err) {
       console.error('Error retrieving comments from Redis:', err);
     }
@@ -113,16 +74,6 @@ class StatisticsUtils {
     return allComments;
   }
 
-  /**
-   * Aggregate all system statistics into a comprehensive JSON response
-   * @param {Object} options - Configuration object
-   * @param {Object} options.commentApiStats - Comment API statistics
-   * @param {Object} options.readerApiStats - Reader API statistics object
-   * @param {Object} options.readerApiManagerStats - Reader API Manager statistics (optional)
-   * @param {Object} options.clientStats - Client statistics object
-   * @param {Array} options.allComments - Array of all comments
-   * @returns {Object} Comprehensive statistics object ready for JSON response
-   */
   static aggregateSystemStatistics(options) {
     const {
       commentApiStats = {},
@@ -157,7 +108,6 @@ class StatisticsUtils {
       timestamp: new Date().toISOString()
     };
 
-    // Add readerApiManager statistics if provided (for stateful version)
     if (readerApiManagerStats) {
       result.readerApiManager = readerApiManagerStats.data || {};
     }
@@ -166,18 +116,7 @@ class StatisticsUtils {
   }
 }
 
-// ====================================================================
-// SIMULATION UTILITIES SECTION
-// ====================================================================
-
-/**
- * Utility class for simulation printing and formatting
- */
 class SimulationUtils {
-  /**
-   * Print viewer distribution statistics
-   * @param {Map} videoViewers - Map of videoId to Set of viewers
-   */
   static printViewerDistribution(videoViewers) {
     console.log('=== VIEWER DISTRIBUTION STATISTICS ===');
     
@@ -198,7 +137,6 @@ class SimulationUtils {
     console.log(`Min Viewers: ${minViewers}`);
     console.log('');
 
-    // Print top videos
     console.log('Top 20 Most Popular Videos:');
     const topVideos = [...sortedVideos].sort((a, b) => b.count - a.count).slice(0, 20);
     topVideos.forEach((video, index) => {
@@ -206,15 +144,9 @@ class SimulationUtils {
     });
     console.log('');
 
-    // Print distribution buckets
     SimulationUtils.printViewerDistributionBuckets(viewerCounts, sortedVideos.length);
   }
 
-  /**
-   * Print viewer count distribution buckets
-   * @param {Array} viewerCounts - Array of viewer counts
-   * @param {number} totalVideos - Total number of videos
-   */
   static printViewerDistributionBuckets(viewerCounts, totalVideos) {
     const buckets = {
         '1-100': 0,
@@ -242,12 +174,6 @@ class SimulationUtils {
     console.log('');
   }
 
-  /**
-   * Print reader subscription results and statistics
-   * @param {Map} readerSubscriptions - Map of reader ID to Set of subscribed topics
-   * @param {Map} videoViewers - Map of videoId to Set of viewers
-   * @param {number} readerApiInstances - Number of reader API instances
-   */
   static printReaderSubscriptions(readerSubscriptions, videoViewers, readerApiInstances) {
     console.log('=== READER API SUBSCRIPTION RESULTS ===');
     console.log('');
@@ -256,7 +182,6 @@ class SimulationUtils {
     const sortedReaders = Array.from(readerSubscriptions.entries())
         .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
 
-    // Print per-reader statistics
     sortedReaders.forEach(([readerInstanceId, subscribedTopics]) => {
         const subscriptionPercentage = ((subscribedTopics.size / totalVideos) * 100).toFixed(2);
         
@@ -269,7 +194,6 @@ class SimulationUtils {
         }
         console.log(`  Total Viewers Served: ${totalViewers.toLocaleString()}`);
         
-        // Show top topics for this reader
         const topicsByViewers = Array.from(subscribedTopics)
             .map(videoId => ({
                 videoId,
@@ -285,15 +209,9 @@ class SimulationUtils {
         console.log('');
     });
 
-    // Print overall statistics
     SimulationUtils.printOverallSubscriptionStatistics(readerSubscriptions, readerApiInstances);
   }
 
-  /**
-   * Print overall subscription statistics
-   * @param {Map} readerSubscriptions - Map of reader ID to Set of subscribed topics
-   * @param {number} readerApiInstances - Number of reader API instances
-   */
   static printOverallSubscriptionStatistics(readerSubscriptions, readerApiInstances) {
     const totalSubscriptions = Array.from(readerSubscriptions.values())
         .reduce((sum, topics) => sum + topics.size, 0);
@@ -321,10 +239,6 @@ class SimulationUtils {
     console.log('');
   }
 
-  /**
-   * Print simulation completion summary
-   * @param {number} startTime - Simulation start time (Date.now())
-   */
   static printSimulationComplete(startTime) {
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log('=== SIMULATION COMPLETE ===');
@@ -332,29 +246,15 @@ class SimulationUtils {
     console.log('');
   }
 
-  /**
-   * Print a formatted section header
-   * @param {string} title - The section title
-   */
   static printSectionHeader(title) {
     console.log(`=== ${title.toUpperCase()} ===`);
   }
 
-  /**
-   * Print processed viewer count during simulation
-   * @param {number} processedViewers - Number of viewers processed
-   */
   static printProcessedViewers(processedViewers) {
     console.log(`Processed ${processedViewers.toLocaleString()} viewers`);
     console.log('');
   }
 
-  /**
-   * Print detailed reader statistics with video-level breakdown
-   * @param {Map} readerSubscriptions - Map of reader ID to Set of subscribed topics
-   * @param {Map} readerViewerCounts - Map of reader ID to Map of video stats
-   * @param {Map} videoViewers - Map of videoId to Set of viewers
-   */
   static printDetailedReaderStatistics(readerSubscriptions, readerViewerCounts, videoViewers) {
     console.log('=== DETAILED READER STATISTICS ===');
     console.log('');
@@ -368,7 +268,6 @@ class SimulationUtils {
         
         console.log(`${readerInstanceId} (${subscribedTopics.size.toLocaleString()} videos):`);
         
-        // Get top 15 videos by total viewers for this reader
         const videoStatsList = Array.from(readerStats.entries())
             .map(([videoId, stats]) => ({
                 videoId,
@@ -385,7 +284,6 @@ class SimulationUtils {
             console.log(`    ${padding}. ${video.videoId.padEnd(20)} => ${video.totalViewers.toLocaleString().padStart(7)} total | ${video.handledViewers.toLocaleString().padStart(7)} handled`);
         });
 
-        // Calculate total for all videos (not just top 15)
         const allTotalViewers = Array.from(readerStats.values())
             .reduce((sum, stats) => sum + stats.handledViewers, 0);
 

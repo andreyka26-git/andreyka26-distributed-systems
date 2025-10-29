@@ -1,6 +1,6 @@
 const axios = require('axios');
 const redis = require('redis');
-const { StatisticsUtils } = require('../utils');
+const { StatisticsUtils } = require('./utils');
 
 const COMMENT_API_URL = process.env.COMMENT_API_URL || 'http://localhost:3000';
 const STATISTICS_API_URL = process.env.STATISTICS_API_URL || 'http://localhost:5000';
@@ -78,8 +78,7 @@ class Client {
       const handleMessage = (data) => {
         try {
           const message = JSON.parse(data);
-          if (message.type === 'connected') {
-          } else {
+          if (message.type !== 'connected') {
             this.commentsConsumed++;
           }
         } catch (e) {
@@ -147,7 +146,7 @@ async function startAllClients() {
   try {
     redisClient = redis.createClient({ url: `redis://${REDIS_HOST}:6379` });
     redisClient.on('error', (err) => console.error('Redis Client Error', err));
-    
+
     await redisClient.connect();
     await redisClient.flushDb();
 

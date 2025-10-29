@@ -1,7 +1,7 @@
 const express = require('express');
 const redis = require('redis');
 const axios = require('axios');
-const { StatisticsUtils } = require('../utils');
+const { StatisticsUtils } = require('./utils');
 
 const app = express();
 app.use(express.json());
@@ -45,19 +45,15 @@ async function subscribeToVideo(videoid) {
   }
 
   await redisSubscriber.subscribe(topic, (message) => {
-    console.log(`[${INSTANCE_ID}] Message on ${topic}: ${message}`);
-    
     if (connections[videoid]) {
       connections[videoid].forEach(client => {
         client.write(`data: ${message}\n\n`);
         messagesSent++;
       });
-      console.log(`[${INSTANCE_ID}] Sent to ${connections[videoid].length} clients`);
     }
   });
   
   subscribedTopics.add(topic);
-  console.log(`[${INSTANCE_ID}] Subscribed to ${topic}`);
 }
 
 app.post('/connect', async (req, res) => {
@@ -67,27 +63,21 @@ app.post('/connect', async (req, res) => {
     return res.status(400).json({ error: 'userid and videoid are required' });
   }
 
-  console.log(`[${INSTANCE_ID}] New connection request: user ${userid} for video ${videoid}`);
-
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
   res.write(`data: ${JSON.stringify({ type: 'connected', userid, videoid, instance: INSTANCE_ID })}\n\n`);
 
-  // Initialize connections array first to avoid race condition
   if (!connections[videoid]) {
     connections[videoid] = [];
   }
   
   connections[videoid].push(res);
 
-  // Subscribe to topic after adding connection
   if (connections[videoid].length === 1) {
     await subscribeToVideo(videoid);
   }
-
-  console.log(`[${INSTANCE_ID}] Active connections for video ${videoid}: ${connections[videoid].length}`);
 
   req.on('close', () => {
     console.log(`[${INSTANCE_ID}] Client disconnected: user ${userid} from video ${videoid}`);
@@ -99,16 +89,6 @@ app.post('/connect', async (req, res) => {
         console.log(`[${INSTANCE_ID}] No more connections for video ${videoid}`);
       }
     }
-  });
-});
-
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    service: 'reader-api',
-    instance: INSTANCE_ID,
-    activeVideos: Object.keys(connections).length,
-    subscribedTopics: Array.from(subscribedTopics)
   });
 });
 

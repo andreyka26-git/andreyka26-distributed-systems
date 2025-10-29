@@ -1,6 +1,6 @@
 const axios = require('axios');
 const redis = require('redis');
-const { StatisticsUtils } = require('../utils');
+const { StatisticsUtils } = require('./utils');
 
 const COMMENT_API_URL = process.env.COMMENT_API_URL || 'http://localhost:3000';
 const STATISTICS_API_URL = process.env.STATISTICS_API_URL || 'http://localhost:5000';
@@ -9,7 +9,6 @@ const READER_API_URLS = process.env.READER_API_URLS
   ? process.env.READER_API_URLS.split(',') 
   : ['http://localhost:4001', 'http://localhost:4002', 'http://localhost:4003'];
 
-// Client configuration map
 const CLIENT_CONFIGS = [
   { clientId: 'client-1', userId: 'user1', videoId: 'video1' },
   { clientId: 'client-2', userId: 'user2', videoId: 'video1' },
@@ -63,8 +62,6 @@ class Client {
     const readerUrl = READER_API_URLS[Math.floor(Math.random() * READER_API_URLS.length)];
     this.connectedReader = readerUrl;
 
-    console.log(`[${this.clientId}] Connecting to ${readerUrl} for video ${this.videoId}`);
-
     try {
       const response = await axios.post(`${readerUrl}/connect`, {
         userid: this.userId,
@@ -73,25 +70,15 @@ class Client {
         responseType: 'stream'
       });
 
-      console.log(`[${this.clientId}] Connected to ${readerUrl}`);
-
       const handleMessage = (data) => {
         try {
           const message = JSON.parse(data);
-          if (message.type === 'connected') {
-            console.log(`[${this.clientId}] Connection confirmed: ${JSON.stringify(message)}`);
-          } else {
+          if (message.type !== 'connected') {
             this.commentsConsumed++;
-            console.log(`[${this.clientId}] New comment received:`, message);
           }
         } catch (e) {
           console.log(`[${this.clientId}] Received:`, data);
         }
-      };
-
-      const reconnect = () => {
-        this.connectedReader = null;
-        setTimeout(() => this.connectToReader(), 2000);
       };
 
       response.data.on('data', (chunk) => {
@@ -104,12 +91,10 @@ class Client {
 
       response.data.on('end', () => {
         console.log(`[${this.clientId}] Connection closed. Reconnecting...`);
-        reconnect();
       });
 
       response.data.on('error', (err) => {
         console.error(`[${this.clientId}] Stream error:`, err.message);
-        reconnect();
       });
 
     } catch (err) {
@@ -130,7 +115,6 @@ class Client {
         comment
       });
       this.commentsGenerated++;
-      console.log(`[${this.clientId}] Posted comment:`, comment);
     } catch (err) {
       console.error(`[${this.clientId}] Error posting comment:`, err.message);
     }
@@ -148,11 +132,9 @@ class Client {
   }
 }
 
-// Start all clients
 async function startAllClients() {
   console.log('Clearing Redis before starting clients...');
   
-  // Clear Redis completely before starting clients
   let redisClient;
   try {
     redisClient = redis.createClient({ url: `redis://${REDIS_HOST}:6379` });
@@ -171,7 +153,6 @@ async function startAllClients() {
     new Client(config.clientId, config.userId, config.videoId)
   );
 
-  // Start all clients
   clients.forEach(client => client.start());
 }
 

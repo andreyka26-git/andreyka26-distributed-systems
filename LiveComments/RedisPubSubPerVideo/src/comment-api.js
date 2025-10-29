@@ -1,7 +1,7 @@
 const express = require('express');
 const redis = require('redis');
 const axios = require('axios');
-const { StatisticsUtils } = require('../utils');
+const { StatisticsUtils } = require('./utils');
 
 const app = express();
 app.use(express.json());
@@ -17,7 +17,6 @@ async function initRedis() {
   redisPublisher = redis.createClient({ url: `redis://${REDIS_HOST}:6379` });
   redisPublisher.on('error', (err) => console.error('Redis Client Error', err));
   await redisPublisher.connect();
-  console.log('Connected to Redis');
 }
 
 app.post('/comment', async (req, res) => {
@@ -39,28 +38,20 @@ app.post('/comment', async (req, res) => {
   }
   comments[videoid].push(commentData);
 
-  console.log(`New comment from user ${userid} on video ${videoid}: ${comment}`);
-
   try {
     const commentId = `comment:${videoid}:${Date.now()}:${userid}`;
     await redisPublisher.hSet(commentId, commentData);
-    console.log(`Stored comment in Redis hashset: ${commentId}`);
   } catch (err) {
     console.error('Error storing comment in Redis:', err);
   }
 
   try {
     await redisPublisher.publish(`video:${videoid}`, JSON.stringify(commentData));
-    console.log(`Published comment to video:${videoid} topic`);
   } catch (err) {
     console.error('Error publishing to Redis:', err);
   }
 
   res.status(201).json({ success: true, comment: commentData });
-});
-
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'comment-api' });
 });
 
 async function sendStatistics() {

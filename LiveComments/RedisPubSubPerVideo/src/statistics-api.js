@@ -1,6 +1,6 @@
 const express = require('express');
 const redis = require('redis');
-const { StatisticsUtils } = require('../utils');
+const { StatisticsUtils } = require('./utils');
 
 const app = express();
 app.use(express.json());
@@ -18,7 +18,6 @@ async function initRedis() {
   redisClient = redis.createClient({ url: `redis://${REDIS_HOST}:6379` });
   redisClient.on('error', (err) => console.error('Redis Client Error', err));
   await redisClient.connect();
-  console.log('Connected to Redis');
 }
 
 app.post('/comment-api-statistics', (req, res) => {
@@ -32,7 +31,6 @@ app.post('/comment-api-statistics', (req, res) => {
     lastUpdated: new Date().toISOString()
   };
 
-  console.log('Updated Comment API statistics');
   res.status(200).json({ success: true });
 });
 
@@ -51,7 +49,6 @@ app.post('/reader-api-statistics', (req, res) => {
     lastUpdated: new Date().toISOString()
   };
 
-  console.log(`Updated statistics for ${instanceId}`);
   res.status(200).json({ success: true });
 });
 
@@ -73,7 +70,6 @@ app.post('/client-statistics', (req, res) => {
     lastUpdated: new Date().toISOString()
   };
 
-  console.log(`Updated statistics for ${clientId}`);
   res.status(200).json({ success: true });
 });
 
@@ -88,10 +84,6 @@ app.get('/statistics', async (req, res) => {
   });
 
   res.json(aggregatedStats);
-});
-
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'statistics-api' });
 });
 
 async function start() {
