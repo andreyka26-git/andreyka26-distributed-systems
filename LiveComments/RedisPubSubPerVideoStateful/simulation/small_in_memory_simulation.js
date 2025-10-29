@@ -1,7 +1,7 @@
 /**
- * In-Memory Simulation: Live Comments Distribution (Small Scale)
+ * In-Memory Simulation: Live Comments Distribution with ReaderApiManager (Small Scale)
  * Simulates Facebook/YouTube/Twitch/TikTok live comments viewer distribution
- * across multiple reader API instances using pub/sub pattern
+ * across multiple reader API instances using stateful video-to-reader mapping
  * 100 concurrent videos/streams, 1000 concurrent viewers
  */
 
@@ -22,6 +22,17 @@ const LOW_TIER_MAX = 20;
 
 function randomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+// Simple hash function for video assignment
+function hashVideoId(videoId) {
+    let hash = 0;
+    for (let i = 0; i < videoId.length; i++) {
+        const char = videoId.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash);
 }
 
 function generateViewerDistribution() {
@@ -98,38 +109,41 @@ function generateViewerDistribution() {
     return videoViewers;
 }
 
-function simulatePubSubDistribution(videoViewers) {
-    console.log('=== SIMULATING PUB/SUB DISTRIBUTION ===');
+function simulateStatefulDistribution(videoViewers) {
+    console.log('=== SIMULATING STATEFUL VIDEO-TO-READER DISTRIBUTION ===');
     console.log(`Reader API Instances: ${READER_API_INSTANCES}`);
+    console.log('ReaderApiManager assigns each video to a specific reader API');
     console.log('');
 
-    const viewerToReader = new Map();
+    const videoToReader = new Map();
     const readerSubscriptions = new Map();
     
     for (let i = 0; i < READER_API_INSTANCES; i++) {
         readerSubscriptions.set(`reader_${i + 1}`, new Set());
     }
 
-    console.log('Assigning viewers to random reader instances...');
-    let processedViewers = 0;
+    console.log('Assigning videos to reader instances using hash-based distribution...');
     
-    for (const [videoId, viewers] of videoViewers.entries()) {
-        for (const viewerId of viewers) {
-            // IMPORTANT: assigning randomly
-            const readerIndex = Math.floor(Math.random() * READER_API_INSTANCES);
-            const readerInstanceId = `reader_${readerIndex + 1}`;
-            
-            viewerToReader.set(viewerId, readerInstanceId);
-            readerSubscriptions.get(readerInstanceId).add(videoId);
-            
-            processedViewers++;
-        }
+    const sortedVideos = Array.from(videoViewers.keys()).sort((a, b) => {
+        const aNum = parseInt(a.split('_')[1]);
+        const bNum = parseInt(b.split('_')[1]);
+        return aNum - bNum;
+    });
+    
+    for (const videoId of sortedVideos) {
+        // IMPORTANT: assigning using hash-based sharding for better distribution
+        const videoHash = hashVideoId(videoId);
+        const readerIndex = videoHash % READER_API_INSTANCES;
+        const readerInstanceId = `reader_${readerIndex + 1}`;
+        
+        videoToReader.set(videoId, readerInstanceId);
+        readerSubscriptions.get(readerInstanceId).add(videoId);
     }
 
-    console.log(`Processed ${processedViewers.toLocaleString()} viewers`);
+    console.log(`Assigned ${videoToReader.size} videos to ${READER_API_INSTANCES} reader instances`);
     console.log('');
 
-    return { readerSubscriptions, viewerToReader };
+    return { videoToReader, readerSubscriptions };
 }
 
 function printViewerDistribution(videoViewers) {
@@ -253,7 +267,7 @@ function runSimulation() {
     const videoViewers = generateViewerDistribution();
     printViewerDistribution(videoViewers);
 
-    const { readerSubscriptions, viewerToReader } = simulatePubSubDistribution(videoViewers);
+    const { videoToReader, readerSubscriptions } = simulateStatefulDistribution(videoViewers);
     printReaderSubscriptions(readerSubscriptions, videoViewers);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);

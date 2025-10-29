@@ -1,0 +1,130 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - comments-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  statistics-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node src/statistics-api.js
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - REDIS_HOST=redis
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - comments-network
+
+  comment-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node src/comment-api.js
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - REDIS_HOST=redis
+      - STATISTICS_API_URL=http://statistics-api:5000
+      - READER_API_MANAGER_URL=http://reader-api-manager:6000
+    depends_on:
+      redis:
+        condition: service_healthy
+      statistics-api:
+        condition: service_started
+    networks:
+      - comments-network
+
+  reader-api-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node src/reader-api.js
+    ports:
+      - "4001:4000"
+    environment:
+      - PORT=4000
+      - INSTANCE_ID=reader-api-1
+      - REDIS_HOST=redis
+      - STATISTICS_API_URL=http://statistics-api:5000
+    depends_on:
+      redis:
+        condition: service_healthy
+      statistics-api:
+        condition: service_started
+    networks:
+      - comments-network
+
+  reader-api-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node src/reader-api.js
+    ports:
+      - "4002:4000"
+    environment:
+      - PORT=4000
+      - INSTANCE_ID=reader-api-2
+      - REDIS_HOST=redis
+      - STATISTICS_API_URL=http://statistics-api:5000
+    depends_on:
+      redis:
+        condition: service_healthy
+      statistics-api:
+        condition: service_started
+    networks:
+      - comments-network
+
+  reader-api-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node src/reader-api-manager.js
+    ports:
+      - "6000:6000"
+    environment:
+      - PORT=6000
+      - REDIS_HOST=redis
+      - STATISTICS_API_URL=http://statistics-api:5000
+      - READER_API_URLS=http://reader-api-1:4000,http://reader-api-2:4000
+    depends_on:
+      redis:
+        condition: service_healthy
+      statistics-api:
+        condition: service_started
+    networks:
+      - comments-network
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node src/client.js
+    environment:
+      - COMMENT_API_URL=http://comment-api:3000
+      - STATISTICS_API_URL=http://statistics-api:5000
+      - READER_API_MANAGER_URL=http://reader-api-manager:6000
+    depends_on:
+      - comment-api
+      - reader-api-manager
+      - statistics-api
+    networks:
+      - comments-network
+
+networks:
+  comments-network:
+    driver: bridge

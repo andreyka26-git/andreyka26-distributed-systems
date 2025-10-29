@@ -1,11 +1,18 @@
 # Real-Time Comments POC with Redis Pub/Sub
 
+The system design diagram is in the folder.
+A proof-of-concept implementation of a real-time commenting system (FB live comments) using Node.js, Redis Pub/Sub, and Server-Sent Events (SSE).
+
+It works:
+- Client randomly subscribes to any Reader API.
+- Reader API subscribes to the video that clients mentioned on connection, via subscribing to Redis PubSub channel.
+- Comment API pushes comment to respective channel (by video id)
+
 The objective: Simulate the flaws of this approach in System Designs
 
-Bad fit in case there are too many videos. Too heavy videos (celebrity problem) is out of scope here.
-Since users are going to random "reader" service. In the end every reader API is subscribed to ALL the topics and will not be able to catch up with every update
+Problem: it was shown that when we have a lot of videos, eventually all Reader API instances will be subscribed to 80% of all channels, which makes Reader API horizontal scaling impossible.
 
-A proof-of-concept implementation of a real-time commenting system (FB live comments) using Node.js, Redis Pub/Sub, and Server-Sent Events (SSE).
+## Expected Traffic
 
 The data from Chat GPT:
 - Twitch 95k concurrent live streams, 2M concurrent viewers => 25 per video/stream
@@ -14,19 +21,10 @@ The data from Chat GPT:
 
 ^^ I would say the fair would be to use 90k concurrent live streams with around 2M viewers.
 
-## Scale Simulation
-
-To demonstrate the architecture flaw at scale (200 videos, 5000 viewers), use the efficient simulator:
-
+To run:
 ```bash
-docker-compose -f docker-compose-simulator.yml up
+docker-compose up
 ```
-
-This runs **5 Reader APIs** and simulates **5000 viewers** watching **200 videos** in a single client container.
-
-**Key finding**: Each Reader API subscribes to ALL ~200 video topics, creating ~1000 total Redis subscriptions instead of the optimal ~200.
-
-See **[SIMULATION.md](SIMULATION.md)** for detailed analysis and configuration options.
 
 ## Architecture
 

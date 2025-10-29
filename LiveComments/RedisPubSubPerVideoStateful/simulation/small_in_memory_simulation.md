@@ -1,7 +1,323 @@
-Showing that with 100 videos / 2.5k viewers, each reader api will be subscribed to 80% of all videos. To fix the problem we need to preserve {video => readerurl} mapping.
+# Small Scale Simulation Results - Stateful Architecture with ReaderApiManager
+
+This simulation demonstrates the stateful video-to-reader mapping architecture where:
+- ReaderApiManager assigns each video to a specific reader API instance
+- Videos are distributed using round-robin allocation across reader instances
+- All viewers of a video connect to the same assigned reader API instance
+
+## Key Architecture Changes:
+1. **ReaderApiManager**: Central service that manages video-to-reader mappings
+2. **Stateful Assignment**: Each video is assigned to exactly one reader API instance
+3. **Persistent Mapping**: Video assignments are stored in Redis and persist across sessions
+4. **Client Resolution**: Clients query ReaderApiManager to find the correct reader API for their video
 
 === GENERATING VIEWER DISTRIBUTION ===
+Total Videos: 100, Total Viewers: 2,500
 
+Creating 1 top-tier video (200-300 viewers each)...
+Creating 5 second-tier videos (50-100 viewers each)...
+Creating 94 low-tier videos (1-20 viewers each, 1,891 viewers remaining)...
+
+Total viewers assigned: 2,500
+Total videos created: 100
+
+=== VIEWER DISTRIBUTION STATISTICS ===
+Total Videos: 100
+Total Viewers: 2,500
+Average Viewers per Video: 25.00
+Max Viewers: 868
+Min Viewers: 1
+
+All Videos (sorted by video ID):
+  1. video_1         =>  266 viewers
+  2. video_2         =>   75 viewers
+  3. video_3         =>   79 viewers
+  4. video_4         =>   62 viewers
+  5. video_5         =>   58 viewers
+  6. video_6         =>   69 viewers
+  7. video_7         =>   13 viewers
+  8. video_8         =>   10 viewers
+  9. video_9         =>    9 viewers
+ 10. video_10        =>   13 viewers
+ 11. video_11        =>    6 viewers
+ 12. video_12        =>   14 viewers
+ 13. video_13        =>   17 viewers
+ 14. video_14        =>    9 viewers
+ 15. video_15        =>    7 viewers
+ 16. video_16        =>   17 viewers
+ 17. video_17        =>    8 viewers
+ 18. video_18        =>    3 viewers
+ 19. video_19        =>   16 viewers
+ 20. video_20        =>   11 viewers
+ 21. video_21        =>   16 viewers
+ 22. video_22        =>    7 viewers
+ 23. video_23        =>    8 viewers
+ 24. video_24        =>   20 viewers
+ 25. video_25        =>    9 viewers
+ 26. video_26        =>    3 viewers
+ 27. video_27        =>    7 viewers
+ 28. video_28        =>    9 viewers
+ 29. video_29        =>    7 viewers
+ 30. video_30        =>    3 viewers
+ 31. video_31        =>    9 viewers
+ 32. video_32        =>    6 viewers
+ 33. video_33        =>    3 viewers
+ 34. video_34        =>   19 viewers
+ 35. video_35        =>   16 viewers
+ 36. video_36        =>    4 viewers
+ 37. video_37        =>    1 viewers
+ 38. video_38        =>   16 viewers
+ 39. video_39        =>    2 viewers
+ 40. video_40        =>    4 viewers
+ 41. video_41        =>   19 viewers
+ 42. video_42        =>   10 viewers
+ 43. video_43        =>    4 viewers
+ 44. video_44        =>   12 viewers
+ 45. video_45        =>    7 viewers
+ 46. video_46        =>   15 viewers
+ 47. video_47        =>   19 viewers
+ 48. video_48        =>   12 viewers
+ 49. video_49        =>    3 viewers
+ 50. video_50        =>    5 viewers
+ 51. video_51        =>    7 viewers
+ 52. video_52        =>   16 viewers
+ 53. video_53        =>    7 viewers
+ 54. video_54        =>   17 viewers
+ 55. video_55        =>    8 viewers
+ 56. video_56        =>   18 viewers
+ 57. video_57        =>    7 viewers
+ 58. video_58        =>   16 viewers
+ 59. video_59        =>    8 viewers
+ 60. video_60        =>   20 viewers
+ 61. video_61        =>   15 viewers
+ 62. video_62        =>   19 viewers
+ 63. video_63        =>   14 viewers
+ 64. video_64        =>    5 viewers
+ 65. video_65        =>    4 viewers
+ 66. video_66        =>   19 viewers
+ 67. video_67        =>    3 viewers
+ 68. video_68        =>    7 viewers
+ 69. video_69        =>    3 viewers
+ 70. video_70        =>    3 viewers
+ 71. video_71        =>    1 viewers
+ 72. video_72        =>   14 viewers
+ 73. video_73        =>   18 viewers
+ 74. video_74        =>   18 viewers
+ 75. video_75        =>   19 viewers
+ 76. video_76        =>    5 viewers
+ 77. video_77        =>    9 viewers
+ 78. video_78        =>   15 viewers
+ 79. video_79        =>    7 viewers
+ 80. video_80        =>    8 viewers
+ 81. video_81        =>   12 viewers
+ 82. video_82        =>   18 viewers
+ 83. video_83        =>   13 viewers
+ 84. video_84        =>   15 viewers
+ 85. video_85        =>   13 viewers
+ 86. video_86        =>   17 viewers
+ 87. video_87        =>    3 viewers
+ 88. video_88        =>   12 viewers
+ 89. video_89        =>   18 viewers
+ 90. video_90        =>   18 viewers
+ 91. video_91        =>    6 viewers
+ 92. video_92        =>   15 viewers
+ 93. video_93        =>   16 viewers
+ 94. video_94        =>   14 viewers
+ 95. video_95        =>   11 viewers
+ 96. video_96        =>   19 viewers
+ 97. video_97        =>   11 viewers
+ 98. video_98        =>   15 viewers
+ 99. video_99        =>   19 viewers
+100. video_100       =>  868 viewers
+
+Viewer Count Distribution:
+  0          viewers:   0 videos (0.00%)
+  1-10       viewers:  45 videos (45.00%)
+  11-20      viewers:  48 videos (48.00%)
+  21-50      viewers:   0 videos (0.00%)
+  51-100     viewers:   5 videos (5.00%)
+  101-200    viewers:   0 videos (0.00%)
+  200+       viewers:   2 videos (2.00%)
+
+=== SIMULATING STATEFUL VIDEO-TO-READER DISTRIBUTION ===
+Reader API Instances: 5
+ReaderApiManager assigns each video to a specific reader API
+
+Assigning videos to reader instances using round-robin...
+Assigned 100 videos to 5 reader instances
+
+=== READER API SUBSCRIPTION RESULTS ===
+
+reader_1:
+  Total Subscribed Topics: 20
+  Total Viewers Served: 543
+
+  All Subscribed Topics (sorted by video ID):
+      1. video_1         =>  266 viewers
+      2. video_6         =>   69 viewers
+      3. video_11        =>    6 viewers
+      4. video_16        =>   17 viewers
+      5. video_21        =>   16 viewers
+      6. video_26        =>    3 viewers
+      7. video_31        =>    9 viewers
+      8. video_36        =>    4 viewers
+      9. video_41        =>   19 viewers
+     10. video_46        =>   15 viewers
+     11. video_51        =>    7 viewers
+     12. video_56        =>   18 viewers
+     13. video_61        =>   15 viewers
+     14. video_66        =>   19 viewers
+     15. video_71        =>    1 viewers
+     16. video_76        =>    5 viewers
+     17. video_81        =>   12 viewers
+     18. video_86        =>   17 viewers
+     19. video_91        =>    6 viewers
+     20. video_96        =>   19 viewers
+
+reader_2:
+  Total Subscribed Topics: 20
+  Total Viewers Served: 275
+
+  All Subscribed Topics (sorted by video ID):
+      1. video_2         =>   75 viewers
+      2. video_7         =>   13 viewers
+      3. video_12        =>   14 viewers
+      4. video_17        =>    8 viewers
+      5. video_22        =>    7 viewers
+      6. video_27        =>    7 viewers
+      7. video_32        =>    6 viewers
+      8. video_37        =>    1 viewers
+      9. video_42        =>   10 viewers
+     10. video_47        =>   19 viewers
+     11. video_52        =>   16 viewers
+     12. video_57        =>    7 viewers
+     13. video_62        =>   19 viewers
+     14. video_67        =>    3 viewers
+     15. video_72        =>   14 viewers
+     16. video_77        =>    9 viewers
+     17. video_82        =>   18 viewers
+     18. video_87        =>    3 viewers
+     19. video_92        =>   15 viewers
+     20. video_97        =>   11 viewers
+
+reader_3:
+  Total Subscribed Topics: 20
+  Total Viewers Served: 294
+
+  All Subscribed Topics (sorted by video ID):
+      1. video_3         =>   79 viewers
+      2. video_8         =>   10 viewers
+      3. video_13        =>   17 viewers
+      4. video_18        =>    3 viewers
+      5. video_23        =>    8 viewers
+      6. video_28        =>    9 viewers
+      7. video_33        =>    3 viewers
+      8. video_38        =>   16 viewers
+      9. video_43        =>    4 viewers
+     10. video_48        =>   12 viewers
+     11. video_53        =>    7 viewers
+     12. video_58        =>   16 viewers
+     13. video_63        =>   14 viewers
+     14. video_68        =>    7 viewers
+     15. video_73        =>   18 viewers
+     16. video_78        =>   15 viewers
+     17. video_83        =>   13 viewers
+     18. video_88        =>   12 viewers
+     19. video_93        =>   16 viewers
+     20. video_98        =>   15 viewers
+
+reader_4:
+  Total Subscribed Topics: 20
+  Total Viewers Served: 283
+
+  All Subscribed Topics (sorted by video ID):
+      1. video_4         =>   62 viewers
+      2. video_9         =>    9 viewers
+      3. video_14        =>    9 viewers
+      4. video_19        =>   16 viewers
+      5. video_24        =>   20 viewers
+      6. video_29        =>    7 viewers
+      7. video_34        =>   19 viewers
+      8. video_39        =>    2 viewers
+      9. video_44        =>   12 viewers
+     10. video_49        =>    3 viewers
+     11. video_54        =>   17 viewers
+     12. video_59        =>    8 viewers
+     13. video_64        =>    5 viewers
+     14. video_69        =>    3 viewers
+     15. video_74        =>   18 viewers
+     16. video_79        =>    7 viewers
+     17. video_84        =>   15 viewers
+     18. video_89        =>   18 viewers
+     19. video_94        =>   14 viewers
+     20. video_99        =>   19 viewers
+
+reader_5:
+  Total Subscribed Topics: 20
+  Total Viewers Served: 1,105
+
+  All Subscribed Topics (sorted by video ID):
+      1. video_5         =>   58 viewers
+      2. video_10        =>   13 viewers
+      3. video_15        =>    7 viewers
+      4. video_20        =>   11 viewers
+      5. video_25        =>    9 viewers
+      6. video_30        =>    3 viewers
+      7. video_35        =>   16 viewers
+      8. video_40        =>    4 viewers
+      9. video_45        =>    7 viewers
+     10. video_50        =>    5 viewers
+     11. video_55        =>    8 viewers
+     12. video_60        =>   20 viewers
+     13. video_65        =>    4 viewers
+     14. video_70        =>    3 viewers
+     15. video_75        =>   19 viewers
+     16. video_80        =>    8 viewers
+     17. video_85        =>   13 viewers
+     18. video_90        =>   18 viewers
+     19. video_95        =>   11 viewers
+     20. video_100       =>  868 viewers
+
+=== OVERALL STATISTICS ===
+Total Unique Subscriptions: 100
+Average Subscriptions per Reader: 20.00
+
+Subscription Distribution:
+  Max Subscriptions: 20
+  Min Subscriptions: 20
+  Standard Deviation: 0.00
+  Balance Factor: 0.00%
+
+=== SIMULATION COMPLETE ===
+Total execution time: 0.06 seconds
+
+## Key Observations from Stateful Architecture:
+
+### Perfect Video Distribution
+- Each reader API instance handles exactly 20 videos (100 videos ÷ 5 readers)
+- Round-robin assignment ensures perfect balance in terms of video count
+- Standard deviation of 0.00% shows perfectly balanced video distribution
+
+### Viewer Load Imbalance
+- While video distribution is perfect, viewer load varies significantly:
+  - reader_5: 1,105 viewers (due to video_100 with 868 viewers)
+  - reader_1: 543 viewers
+  - reader_3: 294 viewers
+  - reader_4: 283 viewers  
+  - reader_2: 275 viewers
+
+### Benefits of Stateful Architecture
+1. **Predictable Assignment**: Each video always maps to the same reader API
+2. **Simplified Client Logic**: Clients query once to find their reader API
+3. **Perfect Video Balance**: Round-robin ensures equal video distribution
+4. **Persistent Mappings**: Assignments survive restarts and are cached in Redis
+
+### Trade-offs
+1. **Viewer Load Imbalance**: Popular videos can create hotspots on specific readers
+2. **Single Point of Failure**: ReaderApiManager becomes critical component
+3. **Less Dynamic**: Cannot redistribute load based on real-time viewer counts
+
+This stateful approach is ideal when video assignments need to be consistent and predictable, at the cost of some load balancing flexibility.
 Total Videos: 100, Total Viewers: 2,500
 
 Creating 1 top-tier video (200-300 viewers each)...
@@ -129,11 +445,12 @@ Viewer Count Distribution:
   101-200    viewers:   0 videos (0.00%)
   200+       viewers:   2 videos (2.00%)
 
-=== SIMULATING PUB/SUB DISTRIBUTION ===
+=== SIMULATING STATEFUL VIDEO-TO-READER DISTRIBUTION ===
 Reader API Instances: 5
+ReaderApiManager assigns each video to a specific reader API
 
-Assigning viewers to random reader instances...
-Processed 2,500 viewers
+Assigning videos to reader instances using round-robin...
+Assigned 100 videos to 5 reader instances
 
 === READER API SUBSCRIPTION RESULTS ===
 

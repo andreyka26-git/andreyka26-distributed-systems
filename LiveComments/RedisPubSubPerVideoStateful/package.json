@@ -1,0 +1,19 @@
+{
+  "name": "redis-pubsub-comments",
+  "version": "1.0.0",
+  "description": "Real-time comments POC using Redis Pub/Sub",
+  "main": "index.js",
+  "scripts": {
+    "comment-api": "node src/comment-api.js",
+    "reader-api": "node src/reader-api.js",
+    "reader-api-manager": "node src/reader-api-manager.js",
+    "client": "node src/client.js",
+    "statistics-api": "node src/statistics-api.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "redis": "^4.6.7",
+    "axios": "^1.6.0",
+    "eventsource": "^2.0.2"
+  }
+}

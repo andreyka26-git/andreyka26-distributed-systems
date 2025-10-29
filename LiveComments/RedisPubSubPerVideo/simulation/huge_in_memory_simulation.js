@@ -116,6 +116,7 @@ function simulatePubSubDistribution(videoViewers) {
     
     for (const [videoId, viewers] of videoViewers.entries()) {
         for (const viewerId of viewers) {
+            // IMPORTANT: assigning randomly
             const readerIndex = Math.floor(Math.random() * READER_API_INSTANCES);
             const readerInstanceId = `reader_${readerIndex + 1}`;
             
@@ -190,12 +191,15 @@ function printReaderSubscriptions(readerSubscriptions, videoViewers) {
     console.log('=== READER API SUBSCRIPTION RESULTS ===');
     console.log('');
 
+    const totalVideos = videoViewers.size;
     const sortedReaders = Array.from(readerSubscriptions.entries())
         .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
 
     sortedReaders.forEach(([readerInstanceId, subscribedTopics]) => {
+        const subscriptionPercentage = ((subscribedTopics.size / totalVideos) * 100).toFixed(2);
+        
         console.log(`${readerInstanceId}:`);
-        console.log(`  Total Subscribed Topics: ${subscribedTopics.size.toLocaleString()}`);
+        console.log(`  Total Subscribed Topics: ${subscribedTopics.size.toLocaleString()} / ${totalVideos.toLocaleString()} videos (${subscriptionPercentage}%)`);
         
         let totalViewers = 0;
         for (const videoId of subscribedTopics) {
