@@ -97,6 +97,7 @@ services:
       - COMMENT_API_URL=http://comment-api:3000
       - STATISTICS_API_URL=http://statistics-api:5000
       - READER_API_URLS=http://reader-api-1:4000,http://reader-api-2:4000
+      - REDIS_HOST=redis
     depends_on:
       - comment-api
       - reader-api-1

@@ -1,6 +1,7 @@
 const express = require('express');
 const redis = require('redis');
 const axios = require('axios');
+const { StatisticsUtils } = require('../utils');
 
 const app = express();
 app.use(express.json());
@@ -115,13 +116,17 @@ async function sendStatistics() {
   try {
     const totalConnections = Object.values(connections).reduce((sum, conns) => sum + conns.length, 0);
 
-    await axios.post(`${STATISTICS_API_URL}/reader-api-statistics`, {
-      instanceId: INSTANCE_ID,
-      activeConnections: totalConnections,
-      subscribedTopics: Array.from(subscribedTopics),
-      messagesSent
-    });
-    console.log(`[${INSTANCE_ID}] Sent statistics: connections=${totalConnections}, messages=${messagesSent}, topics=${subscribedTopics.size}`);
+    await StatisticsUtils.sendStatistics(
+      STATISTICS_API_URL,
+      '/reader-api-statistics',
+      {
+        instanceId: INSTANCE_ID,
+        activeConnections: totalConnections,
+        subscribedTopics: Array.from(subscribedTopics),
+        messagesSent
+      },
+      `[${INSTANCE_ID}]`
+    );
   } catch (err) {
     console.error(`[${INSTANCE_ID}] Error sending statistics:`, err.message);
   }

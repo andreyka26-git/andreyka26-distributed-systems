@@ -1,7 +1,10 @@
 const axios = require('axios');
+const redis = require('redis');
+const { StatisticsUtils } = require('../utils');
 
 const COMMENT_API_URL = process.env.COMMENT_API_URL || 'http://localhost:3000';
 const STATISTICS_API_URL = process.env.STATISTICS_API_URL || 'http://localhost:5000';
+const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const READER_API_URLS = process.env.READER_API_URLS 
   ? process.env.READER_API_URLS.split(',') 
   : ['http://localhost:4001', 'http://localhost:4002', 'http://localhost:4003'];
@@ -40,8 +43,10 @@ class Client {
   }
 
   async sendStatistics() {
-    try {
-      await axios.post(`${STATISTICS_API_URL}/client-statistics`, {
+    await StatisticsUtils.sendStatistics(
+      STATISTICS_API_URL,
+      '/client-statistics',
+      {
         clientId: this.clientId,
         userId: this.userId,
         videoId: this.videoId,
@@ -49,11 +54,9 @@ class Client {
         commentsConsumed: this.commentsConsumed,
         subscribedTopics: [`video:${this.videoId}`],
         connectedReader: this.connectedReader
-      });
-      console.log(`[${this.clientId}] Sent statistics: generated=${this.commentsGenerated}, consumed=${this.commentsConsumed}`);
-    } catch (err) {
-      console.error(`[${this.clientId}] Error sending statistics:`, err.message);
-    }
+      },
+      `[${this.clientId}]`
+    );
   }
 
   async connectToReader() {
@@ -147,6 +150,21 @@ class Client {
 
 // Start all clients
 async function startAllClients() {
+  console.log('Clearing Redis before starting clients...');
+  
+  // Clear Redis completely before starting clients
+  let redisClient;
+  try {
+    redisClient = redis.createClient({ url: `redis://${REDIS_HOST}:6379` });
+    redisClient.on('error', (err) => console.error('Redis Client Error', err));
+    await redisClient.connect();
+    await redisClient.flushDb();
+    console.log('Redis database cleared by client');
+    await redisClient.disconnect();
+  } catch (err) {
+    console.error('Error clearing Redis:', err.message);
+  }
+
   console.log(`Starting ${CLIENT_CONFIGS.length} clients...`);
   
   const clients = CLIENT_CONFIGS.map(config => 

@@ -1,8 +1,11 @@
 const axios = require('axios');
+const redis = require('redis');
+const { StatisticsUtils } = require('../utils');
 
 const COMMENT_API_URL = process.env.COMMENT_API_URL || 'http://localhost:3000';
 const STATISTICS_API_URL = process.env.STATISTICS_API_URL || 'http://localhost:5000';
 const READER_API_MANAGER_URL = process.env.READER_API_MANAGER_URL || 'http://localhost:6000';
+const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 
 // Client configuration map
 const CLIENT_CONFIGS = [
@@ -38,8 +41,10 @@ class Client {
   }
 
   async sendStatistics() {
-    try {
-      await axios.post(`${STATISTICS_API_URL}/client-statistics`, {
+    await StatisticsUtils.sendStatistics(
+      STATISTICS_API_URL,
+      '/client-statistics',
+      {
         clientId: this.clientId,
         userId: this.userId,
         videoId: this.videoId,
@@ -47,18 +52,13 @@ class Client {
         commentsConsumed: this.commentsConsumed,
         subscribedTopics: [`video:${this.videoId}`],
         connectedReader: this.connectedReader
-      });
-      console.log(`[${this.clientId}] Sent statistics: generated=${this.commentsGenerated}, consumed=${this.commentsConsumed}`);
-    } catch (err) {
-      console.error(`[${this.clientId}] Error sending statistics:`, err.message);
-    }
+      },
+      `[${this.clientId}]`
+    );
   }
 
   async connectToReader() {
-    console.log(`[${this.clientId}] Resolving reader API for video ${this.videoId}`);
-
     try {
-      // First, register/resolve the reader API for this video
       const registerResponse = await axios.post(`${READER_API_MANAGER_URL}/register`, {
         videoid: this.videoId
       });
@@ -75,25 +75,16 @@ class Client {
         responseType: 'stream'
       });
 
-      console.log(`[${this.clientId}] Connected to ${readerUrl}`);
-
       const handleMessage = (data) => {
         try {
           const message = JSON.parse(data);
           if (message.type === 'connected') {
-            console.log(`[${this.clientId}] Connection confirmed: ${JSON.stringify(message)}`);
           } else {
             this.commentsConsumed++;
-            console.log(`[${this.clientId}] New comment received:`, message);
           }
         } catch (e) {
-          console.log(`[${this.clientId}] Received:`, data);
+          console.log(`[${this.clientId}] Error, Received:`, data);
         }
-      };
-
-      const reconnect = () => {
-        this.connectedReader = null;
-        setTimeout(() => this.connectToReader(), 2000);
       };
 
       response.data.on('data', (chunk) => {
@@ -106,12 +97,10 @@ class Client {
 
       response.data.on('end', () => {
         console.log(`[${this.clientId}] Connection closed. Reconnecting...`);
-        reconnect();
       });
 
       response.data.on('error', (err) => {
         console.error(`[${this.clientId}] Stream error:`, err.message);
-        reconnect();
       });
 
     } catch (err) {
@@ -132,7 +121,6 @@ class Client {
         comment
       });
       this.commentsGenerated++;
-      console.log(`[${this.clientId}] Posted comment:`, comment);
     } catch (err) {
       console.error(`[${this.clientId}] Error posting comment:`, err.message);
     }
@@ -152,6 +140,22 @@ class Client {
 
 // Start all clients
 async function startAllClients() {
+  console.log('Clearing Redis before starting clients...');
+  
+  // Clear Redis completely before starting clients
+  let redisClient;
+  try {
+    redisClient = redis.createClient({ url: `redis://${REDIS_HOST}:6379` });
+    redisClient.on('error', (err) => console.error('Redis Client Error', err));
+    
+    await redisClient.connect();
+    await redisClient.flushDb();
+
+    await redisClient.disconnect();
+  } catch (err) {
+    console.error('Error clearing Redis:', err.message);
+  }
+
   console.log(`Starting ${CLIENT_CONFIGS.length} clients...`);
   
   const clients = CLIENT_CONFIGS.map(config => 
@@ -162,4 +166,4 @@ async function startAllClients() {
   clients.forEach(client => client.start());
 }
 
-startAllClients();
+startAllClients().catch(console.error);

@@ -1,5 +1,6 @@
 const express = require('express');
 const redis = require('redis');
+const { StatisticsUtils } = require('../utils');
 
 const app = express();
 app.use(express.json());
@@ -77,46 +78,16 @@ app.post('/client-statistics', (req, res) => {
 });
 
 app.get('/statistics', async (req, res) => {
-  const readers = Object.values(readerApiStats);
-  const clients = Object.values(clientStats);
-
-  const allComments = [];
-  try {
-    const keys = await redisClient.keys('comment:*');
-    
-    for (const key of keys) {
-      const commentData = await redisClient.hGetAll(key);
-      if (commentData && Object.keys(commentData).length > 0) {
-        allComments.push({ id: key, ...commentData });
-      }
-    }
-    
-    console.log(`Retrieved ${allComments.length} comments from Redis`);
-  } catch (err) {
-    console.error('Error retrieving comments from Redis:', err);
-  }
-
-  res.json({
-    commentApi: commentApiStats.data || {},
-    readerApis: {
-      totalReaders: readers.length,
-      totalActiveConnections: readers.reduce((sum, r) => sum + r.activeConnections, 0),
-      totalMessagesSent: readers.reduce((sum, r) => sum + r.messagesSent, 0),
-      allSubscribedTopics: [...new Set(readers.flatMap(r => r.subscribedTopics))],
-      readers
-    },
-    clients: {
-      totalClients: clients.length,
-      totalCommentsGenerated: clients.reduce((sum, c) => sum + c.commentsGenerated, 0),
-      totalCommentsConsumed: clients.reduce((sum, c) => sum + c.commentsConsumed, 0),
-      clients
-    },
-    storedComments: {
-      total: allComments.length,
-      comments: allComments
-    },
-    timestamp: new Date().toISOString()
+  const allComments = await StatisticsUtils.retrieveCommentsFromRedis(redisClient);
+  
+  const aggregatedStats = StatisticsUtils.aggregateSystemStatistics({
+    commentApiStats,
+    readerApiStats,
+    clientStats,
+    allComments
   });
+
+  res.json(aggregatedStats);
 });
 
 app.get('/health', (req, res) => {

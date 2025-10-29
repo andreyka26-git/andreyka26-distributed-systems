@@ -7,11 +7,6 @@ services:
       - "6379:6379"
     networks:
       - comments-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
 
   statistics-api:
     build:
@@ -24,8 +19,7 @@ services:
       - PORT=5000
       - REDIS_HOST=redis
     depends_on:
-      redis:
-        condition: service_healthy
+      - redis
     networks:
       - comments-network
 
@@ -42,10 +36,8 @@ services:
       - STATISTICS_API_URL=http://statistics-api:5000
       - READER_API_MANAGER_URL=http://reader-api-manager:6000
     depends_on:
-      redis:
-        condition: service_healthy
-      statistics-api:
-        condition: service_started
+      - redis
+      - statistics-api
     networks:
       - comments-network
 
@@ -61,11 +53,10 @@ services:
       - INSTANCE_ID=reader-api-1
       - REDIS_HOST=redis
       - STATISTICS_API_URL=http://statistics-api:5000
+      - READER_API_MANAGER_URL=http://reader-api-manager:6000
     depends_on:
-      redis:
-        condition: service_healthy
-      statistics-api:
-        condition: service_started
+      - redis
+      - statistics-api
     networks:
       - comments-network
 
@@ -81,11 +72,10 @@ services:
       - INSTANCE_ID=reader-api-2
       - REDIS_HOST=redis
       - STATISTICS_API_URL=http://statistics-api:5000
+      - READER_API_MANAGER_URL=http://reader-api-manager:6000
     depends_on:
-      redis:
-        condition: service_healthy
-      statistics-api:
-        condition: service_started
+      - redis
+      - statistics-api
     networks:
       - comments-network
 
@@ -102,10 +92,8 @@ services:
       - STATISTICS_API_URL=http://statistics-api:5000
       - READER_API_URLS=http://reader-api-1:4000,http://reader-api-2:4000
     depends_on:
-      redis:
-        condition: service_healthy
-      statistics-api:
-        condition: service_started
+      - redis
+      - statistics-api
     networks:
       - comments-network
 
@@ -118,6 +106,7 @@ services:
       - COMMENT_API_URL=http://comment-api:3000
       - STATISTICS_API_URL=http://statistics-api:5000
       - READER_API_MANAGER_URL=http://reader-api-manager:6000
+      - REDIS_HOST=redis
     depends_on:
       - comment-api
       - reader-api-manager

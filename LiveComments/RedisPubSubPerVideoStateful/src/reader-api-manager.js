@@ -1,6 +1,7 @@
 const express = require('express');
 const redis = require('redis');
 const axios = require('axios');
+const { StatisticsUtils } = require('../utils');
 
 const app = express();
 app.use(express.json());
@@ -9,7 +10,6 @@ const PORT = process.env.PORT || 6000;
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const STATISTICS_API_URL = process.env.STATISTICS_API_URL || 'http://localhost:5000';
 
-// Available reader API instances
 const READER_API_URLS = process.env.READER_API_URLS 
   ? process.env.READER_API_URLS.split(',') 
   : ['http://localhost:4001', 'http://localhost:4002', 'http://localhost:4003'];
@@ -21,10 +21,8 @@ async function initRedis() {
   redisClient = redis.createClient({ url: `redis://${REDIS_HOST}:6379` });
   redisClient.on('error', (err) => console.error('Redis Client Error', err));
   await redisClient.connect();
-  console.log('ReaderApiManager connected to Redis');
 }
 
-// POST endpoint for registering a reader API to a video
 app.post('/register', async (req, res) => {
   const { videoid } = req.body;
 
@@ -35,7 +33,6 @@ app.post('/register', async (req, res) => {
   const redisKey = `video:${videoid}:reader`;
 
   try {
-    // Check if there's already a reader API assigned to this video
     const existingReaderUrl = await redisClient.get(redisKey);
     
     if (existingReaderUrl) {
@@ -47,13 +44,10 @@ app.post('/register', async (req, res) => {
       });
     }
 
-    // Select a reader API instance (round-robin based on registration count)
     const selectedReaderUrl = READER_API_URLS[registrationCount % READER_API_URLS.length];
     registrationCount++;
 
-    // Store the mapping in Redis
     await redisClient.set(redisKey, selectedReaderUrl);
-    
     console.log(`[ReaderApiManager] Registered video ${videoid} to reader API: ${selectedReaderUrl}`);
     
     res.json({ 
@@ -68,7 +62,6 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// GET endpoint for resolving reader API URL by video ID
 app.get('/resolve/:videoid', async (req, res) => {
   const { videoid } = req.params;
 
@@ -87,8 +80,6 @@ app.get('/resolve/:videoid', async (req, res) => {
         videoid 
       });
     }
-
-    console.log(`[ReaderApiManager] Resolved video ${videoid} to reader API: ${readerUrl}`);
     
     res.json({ 
       videoid, 
@@ -101,28 +92,37 @@ app.get('/resolve/:videoid', async (req, res) => {
   }
 });
 
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    service: 'reader-api-manager',
-    availableReaderApis: READER_API_URLS.length,
-    registrationCount
-  });
-});
-
 async function sendStatistics() {
   try {
     // Get all registered video-to-reader mappings
     const keys = await redisClient.keys('video:*:reader');
     const registeredVideos = keys.length;
 
-    await axios.post(`${STATISTICS_API_URL}/reader-api-manager-statistics`, {
-      service: 'reader-api-manager',
-      registeredVideos,
-      availableReaderApis: READER_API_URLS.length,
-      registrationCount
-    });
-    console.log(`[ReaderApiManager] Sent statistics: registeredVideos=${registeredVideos}, availableReaderApis=${READER_API_URLS.length}`);
+    // Get the actual mappings for the top 10 latest registrations
+    const mappings = {};
+    if (keys.length > 0) {
+      // Sort keys to get the most recent ones (keys are in format video:videoid:reader)
+      const sortedKeys = keys.sort().slice(-10); // Get last 10 (most recent)
+      
+      for (const key of sortedKeys) {
+        const videoid = key.match(/video:(.+):reader/)[1];
+        const readerUrl = await redisClient.get(key);
+        mappings[videoid] = readerUrl;
+      }
+    }
+
+    await StatisticsUtils.sendStatistics(
+      STATISTICS_API_URL,
+      '/reader-api-manager-statistics',
+      {
+        service: 'reader-api-manager',
+        registeredVideos,
+        availableReaderApis: READER_API_URLS.length,
+        registrationCount,
+        videoMappings: mappings
+      },
+      '[ReaderApiManager]'
+    );
   } catch (err) {
     console.error(`[ReaderApiManager] Error sending statistics:`, err.message);
   }

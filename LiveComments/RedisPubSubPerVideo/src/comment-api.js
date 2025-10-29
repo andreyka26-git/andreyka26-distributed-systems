@@ -1,6 +1,7 @@
 const express = require('express');
 const redis = require('redis');
 const axios = require('axios');
+const { StatisticsUtils } = require('../utils');
 
 const app = express();
 app.use(express.json());
@@ -17,9 +18,6 @@ async function initRedis() {
   redisPublisher.on('error', (err) => console.error('Redis Client Error', err));
   await redisPublisher.connect();
   console.log('Connected to Redis');
-  
-  await redisPublisher.flushDb();
-  console.log('Redis database cleared');
 }
 
 app.post('/comment', async (req, res) => {
@@ -67,31 +65,20 @@ app.get('/health', (req, res) => {
 
 async function sendStatistics() {
   try {
-    const channels = await redisPublisher.sendCommand(['PUBSUB', 'CHANNELS', 'video:*']);
-    
-    const channelStats = {};
-    for (const channel of channels) {
-      const [, numSubs] = await redisPublisher.sendCommand(['PUBSUB', 'NUMSUB', channel]);
-      channelStats[channel] = numSubs;
-    }
+    const { channels, channelStats } = await StatisticsUtils.aggregateChannelStatistics(redisPublisher);
+    const { commentsByVideo, totalComments } = StatisticsUtils.aggregateCommentStatistics(comments);
 
-    const commentsByVideo = {};
-    let totalComments = 0;
-    
-    for (const [videoid, videoComments] of Object.entries(comments)) {
-      const count = videoComments.length;
-      commentsByVideo[videoid] = count;
-      totalComments += count;
-    }
-
-    await axios.post(`${STATISTICS_API_URL}/comment-api-statistics`, {
-      totalComments,
-      commentsByVideo,
-      activeTopics: channels,
-      topicSubscribers: channelStats
-    });
-
-    console.log(`Sent Comment API statistics: ${totalComments} comments, ${channels.length} topics`);
+    await StatisticsUtils.sendStatistics(
+      STATISTICS_API_URL,
+      '/comment-api-statistics',
+      {
+        totalComments,
+        commentsByVideo,
+        activeTopics: channels,
+        topicSubscribers: channelStats
+      },
+      '[Comment API]'
+    );
   } catch (err) {
     console.error('Error sending statistics:', err.message);
   }
