@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Configuration;
 
+using UrlShortener.UniqueNumberGeneration;
+
 namespace UrlShortener.ShortUrlGeneration;
 
 public interface IShortUrlGeneratorFactory

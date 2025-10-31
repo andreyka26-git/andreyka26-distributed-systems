@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Moq;
 using UrlShortener.ShortUrlGeneration;
+using UrlShortener.UniqueNumberGeneration;
 using Xunit;
 
 namespace UrlShortener.Tests;
@@ -27,7 +28,7 @@ public class ShortUrlGeneratorFactoryTests
     {
         // Arrange
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string>
+            .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ShortUrlGenerator:Strategy"] = configValue
             })
@@ -48,7 +49,7 @@ public class ShortUrlGeneratorFactoryTests
     {
         // Arrange
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string>())
+            .AddInMemoryCollection(new Dictionary<string, string?>())
             .Build();
 
         var mockUniqueIdClient = new Mock<IUniqueIdClient>();
@@ -69,7 +70,7 @@ public class ShortUrlGeneratorFactoryTests
     {
         // Arrange
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string>
+            .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ShortUrlGenerator:Strategy"] = configValue
             })

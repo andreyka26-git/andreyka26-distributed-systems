@@ -1,6 +1,7 @@
 using Moq;
 using Microsoft.Extensions.Configuration;
 using UrlShortener.ShortUrlGeneration;
+using UrlShortener.UniqueNumberGeneration;
 using Xunit;
 
 namespace UrlShortener.Tests;

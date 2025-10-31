@@ -1,4 +1,4 @@
-namespace UrlShortener;
+namespace UrlShortener.UniqueNumberGeneration;
 
 public interface IUniqueIdClient
 {

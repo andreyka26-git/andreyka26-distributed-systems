@@ -66,10 +66,10 @@ public class Base62UtilsTests
     public void ToBase62_WithNullByteArray_ShouldReturnZero()
     {
         // Arrange
-        byte[] bytes = null;
+        byte[]? bytes = null;
 
         // Act
-        var result = Base62Utils.ToBase62(bytes);
+        var result = Base62Utils.ToBase62(bytes!);
 
         // Assert
         Assert.Equal("0", result);

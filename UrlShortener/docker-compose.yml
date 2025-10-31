@@ -1,6 +1,40 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: urlshortener
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    networks:
+      - system-design
+    restart: always
+    ports:
+      - "5432:5432"  # Expose PostgreSQL port for debugging (optional)
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/UrlShortener/Scripts/migration.sql:/docker-entrypoint-initdb.d/migration.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d urlshortener"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 1g
+    cpus: 0.5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    networks:
+      - system-design
+    ports:
+      - "8080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    restart: always
 
   urlshortener-1:
     build:
@@ -9,6 +43,8 @@ services:
     environment:
       - SnowflakeBaseUrl=http://loadbalancer
       - ShortUrlGenerator__Strategy=UniqueNumber
+      - UniqueIdStrategy=AutoIncrement
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=urlshortener;Username=postgres;Password=postgres
     networks:
       - system-design
     restart: always
@@ -16,6 +52,9 @@ services:
       - "80"  # This exposes the port internally to other services, not to the host
     mem_limit: 2g       # ✅ Enforces 2GB RAM limit
     cpus: 1.0
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   urlshortener-2:
     build:
@@ -24,6 +63,8 @@ services:
     environment:
       - SnowflakeBaseUrl=http://loadbalancer
       - ShortUrlGenerator__Strategy=UniqueNumber
+      - UniqueIdStrategy=AutoIncrement
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=urlshortener;Username=postgres;Password=postgres
     networks:
       - system-design
     restart: always
@@ -31,6 +72,9 @@ services:
       - "80"  # This exposes the port internally to other services, not to the host
     mem_limit: 2g       # ✅ Enforces 2GB RAM limit
     cpus: 1.0
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   loadbalancer:
     image: nginx:latest
@@ -38,11 +82,18 @@ services:
       - "5000:80"  # Expose the load balancer on port 5000
     networks:
       - system-design
-    depends_on:
-      - api
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro  # Mount the NGINX configuration
     restart: always
+    depends_on:
+      - urlshortener-1
+      - urlshortener-2
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
 
 networks:
   system-design:

@@ -1,11 +1,11 @@
-﻿namespace UrlShortener;
+namespace UrlShortener.UniqueNumberGeneration;
 
-public class UniqueIdClient : IUniqueIdClient
+public class SnowflakeUniqueIdClient : IUniqueIdClient
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _config;
 
-    public UniqueIdClient(IHttpClientFactory httpClientFactory, IConfiguration config)
+    public SnowflakeUniqueIdClient(IHttpClientFactory httpClientFactory, IConfiguration config)
     {
         _httpClientFactory = httpClientFactory;
         _config = config;
