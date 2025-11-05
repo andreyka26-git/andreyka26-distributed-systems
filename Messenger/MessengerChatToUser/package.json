@@ -1,0 +1,14 @@
+{
+  "name": "messenger-chat-to-user",
+  "version": "1.0.0",
+  "description": "Distributed Messenger System POC with WebSocket fan-out",
+  "main": "index.js",
+  "scripts": {
+    "dev": "docker-compose up --build",
+    "down": "docker-compose down",
+    "clean": "docker-compose down -v"
+  },
+  "keywords": ["messenger", "websocket", "distributed", "nodejs"],
+  "author": "andreyka26",
+  "license": "MIT"
+}

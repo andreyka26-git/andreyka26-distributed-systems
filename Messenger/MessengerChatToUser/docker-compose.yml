@@ -1,0 +1,156 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: messenger_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for WebSocket server mapping
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Statistics API
+  statistics-api:
+    build: ./statistics-api
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Chat API
+  chat-api:
+    build: ./chat-api
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: messenger_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      statistics-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # WebSocket Server 1
+  websocket-server-1:
+    build: ./websocket-server
+    ports:
+      - "8081:8080"
+      - "9081:9080"
+    environment:
+      PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: messenger_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      statistics-api:
+        condition: service_healthy
+
+  # WebSocket Server 2
+  websocket-server-2:
+    build: ./websocket-server
+    ports:
+      - "8082:8080"
+      - "9082:9080"
+    environment:
+      PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: messenger_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      statistics-api:
+        condition: service_healthy
+
+  # WebSocket Server 3
+  websocket-server-3:
+    build: ./websocket-server
+    ports:
+      - "8083:8080"
+      - "9083:9080"
+    environment:
+      PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: messenger_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      statistics-api:
+        condition: service_healthy
+
+  # Client Simulator
+  client-simulator:
+    build: ./client-simulator
+    environment:
+      WEBSOCKET_SERVERS: "ws://websocket-server-1:8080,ws://websocket-server-2:8080,ws://websocket-server-3:8080"
+      CHAT_API_URL: http://chat-api:3001
+      STATISTICS_API_URL: http://statistics-api:3000
+    depends_on:
+      chat-api:
+        condition: service_healthy
+      statistics-api:
+        condition: service_healthy
+      websocket-server-1:
+        condition: service_started
+      websocket-server-2:
+        condition: service_started
+      websocket-server-3:
+        condition: service_started
+
+volumes:
+  postgres_data:

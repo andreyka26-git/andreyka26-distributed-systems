@@ -1,0 +1,17 @@
+{
+  "name": "client-simulator",
+  "version": "1.0.0",
+  "description": "Client simulator for testing the messenger system",
+  "main": "simulator.js",
+  "scripts": {
+    "start": "node simulator.js",
+    "dev": "nodemon simulator.js"
+  },
+  "dependencies": {
+    "ws": "^8.14.2",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

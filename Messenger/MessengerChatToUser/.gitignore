@@ -1,0 +1,8 @@
+README.md
+node_modules/
+*.log
+.env
+.DS_Store
+dist/
+coverage/
+.nyc_output/
