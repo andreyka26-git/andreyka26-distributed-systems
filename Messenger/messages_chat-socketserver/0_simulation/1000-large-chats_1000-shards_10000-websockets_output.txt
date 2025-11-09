@@ -1,0 +1,40 @@
+Creating chats and assigning globally unique members...
+
+Total chats created: 1000
+Total unique users generated: 7494660
+
+Assigning chats to websocket servers and redis shards...
+
+Running message cycle (resolving users -> shards -> websocket servers)...
+
+=== Simulation Summary ===
+
+chat_groups_configured: 1
+total_chats_created: 1000
+total_unique_users: 7494660
+num_websockets: 10000
+num_redis_shards: 1000
+total_chat_messages_authored: 12476
+total_redis_reads: 12476
+total_notifications_sent_to_websockets: 12476
+
+Redis shard reads:
+  min: 5
+  max: 84
+  median: 18.00
+  average: 19.99
+
+Websocket updates:
+  min: 5
+  max: 40
+  median: 13.00
+  average: 13.19
+
+Users per websocket server:
+  min: 0
+  max: 31259
+  median: 0.00
+  average: 749.47
+
+
+Done
