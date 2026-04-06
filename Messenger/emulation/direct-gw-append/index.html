@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Direct GW Append — Simulation</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d0d;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    h1 {
+      text-align: center;
+      padding: 18px;
+      font-size: 18px;
+      letter-spacing: 2px;
+      color: #c8c8c8;
+      border-bottom: 1px solid #333;
+      flex-shrink: 0;
+    }
+
+    /* ── canvas panel ─────────────────────────────────────────── */
+    #canvas-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    svg#diagram {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── controls ─────────────────────────────────────────────── */
+    #controls {
+      padding: 10px 14px;
+      border-top: 1px solid #333;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    button {
+      background: #1e1e1e;
+      border: 1px solid #444;
+      color: #ccc;
+      padding: 6px 14px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      border-radius: 3px;
+      transition: background 0.15s, color 0.15s;
+    }
+    button:hover  { background: #2a2a2a; color: #fff; }
+    button:active { background: #333; }
+    button:disabled { opacity: 0.35; cursor: default; }
+
+    #speed-label { color: #888; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+    input[type=range] { width: 90px; accent-color: #6ab0f5; }
+    #step-label { color: #888; font-size: 12px; margin-left: auto; }
+
+    /* ── SVG node styles ──────────────────────────────────────── */
+    .node-box {
+      rx: 8; ry: 8;
+      stroke-width: 1.5;
+      transition: filter 0.2s;
+    }
+    .node-label {
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      fill: #ddd;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      pointer-events: none;
+    }
+    .node-sub {
+      font-size: 10px;
+      fill: #999;
+    }
+
+    .pulse {
+      animation: pulse-anim 0.5s ease-out;
+    }
+    @keyframes pulse-anim {
+      0%   { filter: drop-shadow(0 0 0px #6ab0f5); }
+      50%  { filter: drop-shadow(0 0 14px #6ab0f5); }
+      100% { filter: drop-shadow(0 0 0px #6ab0f5); }
+    }
+    .pulse-green {
+      animation: pulse-green-anim 0.5s ease-out;
+    }
+    @keyframes pulse-green-anim {
+      0%   { filter: drop-shadow(0 0 0px #7ed321); }
+      50%  { filter: drop-shadow(0 0 14px #7ed321); }
+      100% { filter: drop-shadow(0 0 0px #7ed321); }
+    }
+
+    /* travelling dot -------------------------------------------- */
+    .travel-dot {
+      r: 6;
+      fill: #f5a623;
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Direct GW Append — Messenger Simulation</h1>
+
+<div id="canvas-wrap">
+  <svg id="diagram" viewBox="0 0 820 620" preserveAspectRatio="xMidYMid meet"></svg>
+</div>
+
+<div id="controls">
+  <button id="btn-run">&#9654; Run</button>
+  <button id="btn-step" disabled>Step</button>
+  <button id="btn-reset">Reset</button>
+  <label id="speed-label">
+    Speed
+    <input type="range" id="speed" min="100" max="2000" step="100" value="700" />
+  </label>
+  <span id="step-label">–</span>
+</div>
+
+<script>
+/* ================================================================
+   SIMULATION DATA  (mirrors simulation.py logic, no failures)
+   ================================================================ */
+
+const CONFIG = {
+  NUM_CHATS:            3,
+  USERS_PER_CHAT:       4,
+  NUM_GATEWAY_NODES:    4,
+  NUM_CHAT_USER_SHARDS: 3,
+  NUM_USER_GW_SHARDS:   4,
+};
+
+// ── MD5-based shard helper (same algorithm as Python) ────────────
+function md5(str) {
+  function safeAdd(x, y) {
+    const lsw = (x & 0xffff) + (y & 0xffff);
+    return (((x >> 16) + (y >> 16) + (lsw >> 16)) << 16) | (lsw & 0xffff);
+  }
+  function bitRotateLeft(num, cnt) { return (num << cnt) | (num >>> (32 - cnt)); }
+  function md5cmn(q, a, b, x, s, t) { return safeAdd(bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s), b); }
+  function md5ff(a,b,c,d,x,s,t){ return md5cmn((b&c)|((~b)&d),a,b,x,s,t); }
+  function md5gg(a,b,c,d,x,s,t){ return md5cmn((b&d)|(c&(~d)),a,b,x,s,t); }
+  function md5hh(a,b,c,d,x,s,t){ return md5cmn(b^c^d,a,b,x,s,t); }
+  function md5ii(a,b,c,d,x,s,t){ return md5cmn(c^(b|(~d)),a,b,x,s,t); }
+
+  const bytes = new TextEncoder().encode(str);
+  const len8  = bytes.length;
+  const len32 = Math.ceil((len8 + 9) / 64) * 16;
+  const M = new Int32Array(len32);
+  for (let i = 0; i < len8; i++) M[i >> 2] |= bytes[i] << ((i % 4) * 8);
+  M[len8 >> 2] |= 0x80 << ((len8 % 4) * 8);
+  M[len32 - 2] = len8 * 8;
+
+  let [a,b,c,d] = [1732584193,-271733879,-1732584194,271733878];
+  for (let i = 0; i < len32; i += 16) {
+    const [aa,bb,cc,dd] = [a,b,c,d];
+    a=md5ff(a,b,c,d,M[i+ 0], 7,-680876936);  d=md5ff(d,a,b,c,M[i+ 1],12,-389564586);
+    c=md5ff(c,d,a,b,M[i+ 2],17, 606105819);  b=md5ff(b,c,d,a,M[i+ 3],22,-1044525330);
+    a=md5ff(a,b,c,d,M[i+ 4], 7,-176418897);  d=md5ff(d,a,b,c,M[i+ 5],12, 1200080426);
+    c=md5ff(c,d,a,b,M[i+ 6],17,-1473231341); b=md5ff(b,c,d,a,M[i+ 7],22,-45705983);
+    a=md5ff(a,b,c,d,M[i+ 8], 7, 1770035416); d=md5ff(d,a,b,c,M[i+ 9],12,-1958414417);
+    c=md5ff(c,d,a,b,M[i+10],17,-42063);       b=md5ff(b,c,d,a,M[i+11],22,-1990404162);
+    a=md5ff(a,b,c,d,M[i+12], 7, 1804603682); d=md5ff(d,a,b,c,M[i+13],12,-40341101);
+    c=md5ff(c,d,a,b,M[i+14],17,-1502002290); b=md5ff(b,c,d,a,M[i+15],22, 1236535329);
+    a=md5gg(a,b,c,d,M[i+ 1], 5,-165796510);  d=md5gg(d,a,b,c,M[i+ 6], 9,-1069501632);
+    c=md5gg(c,d,a,b,M[i+11],14, 643717713);  b=md5gg(b,c,d,a,M[i+ 0],20,-373897302);
+    a=md5gg(a,b,c,d,M[i+ 5], 5,-701558691);  d=md5gg(d,a,b,c,M[i+10], 9, 38016083);
+    c=md5gg(c,d,a,b,M[i+15],14,-660478335);  b=md5gg(b,c,d,a,M[i+ 4],20,-405537848);
+    a=md5gg(a,b,c,d,M[i+ 9], 5, 568446438);  d=md5gg(d,a,b,c,M[i+14], 9,-1019803690);
+    c=md5gg(c,d,a,b,M[i+ 3],14,-187363961);  b=md5gg(b,c,d,a,M[i+ 8],20,1163531501);
+    a=md5gg(a,b,c,d,M[i+13], 5,-1444681467); d=md5gg(d,a,b,c,M[i+ 2], 9,-51403784);
+    c=md5gg(c,d,a,b,M[i+ 7],14,1735328473);  b=md5gg(b,c,d,a,M[i+12],20,-1926607734);
+    a=md5hh(a,b,c,d,M[i+ 5], 4,-378558);     d=md5hh(d,a,b,c,M[i+ 8],11,-2022574463);
+    c=md5hh(c,d,a,b,M[i+11],16, 1839030562); b=md5hh(b,c,d,a,M[i+14],23,-35309556);
+    a=md5hh(a,b,c,d,M[i+ 1], 4,-1530992060); d=md5hh(d,a,b,c,M[i+ 4],11, 1272893353);
+    c=md5hh(c,d,a,b,M[i+ 7],16,-155497632);  b=md5hh(b,c,d,a,M[i+10],23,-1094730640);
+    a=md5hh(a,b,c,d,M[i+13], 4, 681279174);  d=md5hh(d,a,b,c,M[i+ 0],11,-358537222);
+    c=md5hh(c,d,a,b,M[i+ 3],16,-722521979);  b=md5hh(b,c,d,a,M[i+ 6],23, 76029189);
+    a=md5hh(a,b,c,d,M[i+ 9], 4,-640364487);  d=md5hh(d,a,b,c,M[i+12],11,-421815835);
+    c=md5hh(c,d,a,b,M[i+15],16, 530742520);  b=md5hh(b,c,d,a,M[i+ 2],23,-995338651);
+    a=md5ii(a,b,c,d,M[i+ 0], 6,-198630844);  d=md5ii(d,a,b,c,M[i+ 7],10,1126891415);
+    c=md5ii(c,d,a,b,M[i+14],15,-1416354905); b=md5ii(b,c,d,a,M[i+ 5],21,-57434055);
+    a=md5ii(a,b,c,d,M[i+12], 6, 1700485571); d=md5ii(d,a,b,c,M[i+ 3],10,-1894986606);
+    c=md5ii(c,d,a,b,M[i+10],15,-1051523);    b=md5ii(b,c,d,a,M[i+ 1],21,-2054922799);
+    a=md5ii(a,b,c,d,M[i+ 8], 6, 1873313359); d=md5ii(d,a,b,c,M[i+15],10,-30611744);
+    c=md5ii(c,d,a,b,M[i+ 6],15,-1560198380); b=md5ii(b,c,d,a,M[i+13],21, 1309151649);
+    a=md5ii(a,b,c,d,M[i+ 4], 6,-145523070);  d=md5ii(d,a,b,c,M[i+11],10,-1120210379);
+    c=md5ii(c,d,a,b,M[i+ 2],15, 718787259);  b=md5ii(b,c,d,a,M[i+ 9],21,-343485551);
+    a=safeAdd(a,aa); b=safeAdd(b,bb); c=safeAdd(c,cc); d=safeAdd(d,dd);
+  }
+  function w2h(n){ return ('0'.repeat(8)+(n>>>0).toString(16)).slice(-8).replace(/../g,x=>x[1]+x[0]).replace(/../g,x=>x[1]+x[0]); }
+  return [w2h(a),w2h(b),w2h(c),w2h(d)].join('');
+}
+
+function shard(key, numShards) {
+  const hex = md5(key);
+  return Number(BigInt('0x' + hex) % BigInt(numShards));
+}
+
+// ── Build simulation world ────────────────────────────────────────
+function buildWorld() {
+  const { NUM_CHATS, USERS_PER_CHAT, NUM_GATEWAY_NODES, NUM_CHAT_USER_SHARDS, NUM_USER_GW_SHARDS } = CONFIG;
+
+  const chatUserShards = Array.from({ length: NUM_CHAT_USER_SHARDS }, () => ({}));
+  const userGWShards   = Array.from({ length: NUM_USER_GW_SHARDS },   () => ({}));
+
+  function addUserToChat(chatId, userId) {
+    const s = shard(chatId, NUM_CHAT_USER_SHARDS);
+    if (!chatUserShards[s][chatId]) chatUserShards[s][chatId] = [];
+    if (!chatUserShards[s][chatId].includes(userId)) chatUserShards[s][chatId].push(userId);
+  }
+  function setGW(userId, gwId) {
+    const s = shard(userId, NUM_USER_GW_SHARDS);
+    userGWShards[s][userId] = gwId;
+  }
+  function getUsers(chatId) {
+    const s = shard(chatId, NUM_CHAT_USER_SHARDS);
+    return chatUserShards[s][chatId] || [];
+  }
+  function getGW(userId) {
+    const s = shard(userId, NUM_USER_GW_SHARDS);
+    return userGWShards[s][userId] || null;
+  }
+
+  const gwIds = Array.from({ length: NUM_GATEWAY_NODES }, (_, i) => `GW${i + 1}`);
+  const gwNodes = {};
+  gwIds.forEach(id => { gwNodes[id] = { userSocket: {}, chatUsers: {} }; });
+
+  function connectUser(gwId, userId, socketId, chatIds) {
+    gwNodes[gwId].userSocket[userId] = socketId;
+    chatIds.forEach(cid => {
+      if (!gwNodes[gwId].chatUsers[cid]) gwNodes[gwId].chatUsers[cid] = [];
+      if (!gwNodes[gwId].chatUsers[cid].includes(userId)) gwNodes[gwId].chatUsers[cid].push(userId);
+    });
+  }
+
+  const users  = {};
+  const chats  = {};
+  let socketCtr = 1, userCtr = 1;
+
+  for (let ci = 0; ci < NUM_CHATS; ci++) {
+    const chatId = `chat${ci + 1}`;
+    chats[chatId] = [];
+    for (let ui = 0; ui < USERS_PER_CHAT; ui++) {
+      const userId   = `u${userCtr}`;
+      const gwId     = gwIds[(userCtr - 1) % NUM_GATEWAY_NODES];
+      const socketId = `sock${socketCtr}`;
+      userCtr++; socketCtr++;
+
+      users[userId] = { gwId, socketId, delivered: 0 };
+      addUserToChat(chatId, userId);
+      setGW(userId, gwId);
+      connectUser(gwId, userId, socketId, [chatId]);
+      chats[chatId].push(userId);
+    }
+  }
+
+  return { users, chats, gwNodes, getUsers, getGW, chatUserShards, userGWShards };
+}
+
+/* ================================================================
+   STEP GENERATOR  — yields discrete animation steps
+   ================================================================ */
+function* makeSteps(world) {
+  const { users, chats, gwNodes, getUsers, getGW } = world;
+  const messages = [];
+  for (const [chatId, uids] of Object.entries(chats)) {
+    messages.push({ chatId, text: 'Hello everyone!', sender: uids[0] });
+    messages.push({ chatId, text: 'How are you?',    sender: uids[1] });
+  }
+
+  for (let mi = 0; mi < messages.length; mi++) {
+    const { chatId, text, sender } = messages[mi];
+    yield { type: 'msg-start', chatId, text, sender, msgIdx: mi, total: messages.length };
+
+    // ① Chat API queries chat-user storage
+    const chatUsers = getUsers(chatId);
+    yield { type: 'query-chat-user', chatId, users: chatUsers };
+
+    // ② Scatter-gather: query user-gw storage for ALL users simultaneously
+    const userGWPairs = chatUsers.map(uid => ({ userId: uid, gwId: getGW(uid) }));
+    yield { type: 'query-user-gw-batch', chatId, userGWPairs };
+
+    // ③ Group by GW
+    const gwGroups = {};
+    for (const { userId, gwId } of userGWPairs) {
+      if (!gwId) continue;
+      if (!gwGroups[gwId]) gwGroups[gwId] = [];
+      gwGroups[gwId].push(userId);
+    }
+
+    // ④ Fanout: route to ALL GW nodes simultaneously
+    const gwTargets = Object.entries(gwGroups).map(([gwId, uids]) => ({ gwId, uids }));
+    yield { type: 'route-to-gw-batch', chatId, gwTargets, text };
+
+    // ⑤ GW delivers to local users via socket (per GW, sequential)
+    for (const { gwId } of gwTargets) {
+      const localUsers = gwNodes[gwId].chatUsers[chatId] || [];
+      for (const uid of localUsers) {
+        const socketId = gwNodes[gwId].userSocket[uid];
+        yield { type: 'deliver', chatId, gwId, userId: uid, socketId, text };
+        users[uid].delivered++;
+      }
+    }
+  }
+
+  yield { type: 'done' };
+}
+
+/* ================================================================
+   DIAGRAM  — SVG layout
+   ================================================================ */
+const W = 820, H = 620;
+
+const GW_POS = {
+  GW1: { x: 110, y: 370 },
+  GW2: { x: 300, y: 370 },
+  GW3: { x: 490, y: 370 },
+  GW4: { x: 110, y: 470 },
+};
+
+// User vertical position
+const USER_Y = 550;
+
+function userPos(userId, users, chats) {
+  for (const [chatId, uids] of Object.entries(chats)) {
+    const idx = uids.indexOf(userId);
+    if (idx === -1) continue;
+    const chatIdx = parseInt(chatId.replace('chat', '')) - 1;
+    const baseX   = 80 + chatIdx * 250;
+    return { x: baseX + idx * 52, y: USER_Y };
+  }
+  return { x: 0, y: 0 };
+}
+
+function buildDiagram(world) {
+  const svg  = document.getElementById('diagram');
+  svg.innerHTML = '';
+
+  const { users, chats, gwNodes } = world;
+
+  const defs = svgEl('defs');
+  svg.appendChild(defs);
+
+  const marker = svgEl('marker', { id: 'arrow', markerWidth: 8, markerHeight: 8, refX: 6, refY: 3, orient: 'auto' });
+  const markerPath = svgEl('path', { d: 'M0,0 L0,6 L8,3 z', fill: '#555' });
+  marker.appendChild(markerPath);
+  defs.appendChild(marker);
+
+  const edgeLayer = svgEl('g', { id: 'edges' });
+  svg.appendChild(edgeLayer);
+
+  const chatApiPositions = [
+    { x: 180, y: 80 }, { x: 410, y: 80 }, { x: 640, y: 80 },
+  ];
+
+  // Chat APIs -> storages
+  chatApiPositions.forEach(pos => {
+    drawEdge(edgeLayer, pos.x + 50, pos.y + 18, 680, 220, '#2a2a2a');
+    drawEdge(edgeLayer, pos.x + 50, pos.y + 18, 680, 330, '#2a2a2a');
+  });
+
+  // Chat APIs -> GW nodes
+  const gwList = Object.keys(GW_POS);
+  chatApiPositions.forEach(pos => {
+    gwList.forEach(gwId => {
+      const gp = GW_POS[gwId];
+      drawEdge(edgeLayer, pos.x, pos.y + 18, gp.x, gp.y - 18, '#2a2a2a');
+    });
+  });
+
+  // GW nodes -> users
+  for (const [gwId, gw] of Object.entries(gwNodes)) {
+    const gp = GW_POS[gwId];
+    for (const userId of Object.keys(gw.userSocket)) {
+      const up = userPos(userId, users, chats);
+      drawEdge(edgeLayer, gp.x, gp.y + 18, up.x, up.y - 14, '#222');
+    }
+  }
+
+  const nodeLayer = svgEl('g', { id: 'nodes' });
+  svg.appendChild(nodeLayer);
+
+  // ChatAPI shared container box
+  const apiBox = svgEl('rect', { x: 90, y: 48, width: 620, height: 64, rx: 10, ry: 10,
+    fill: '#1a1a2e', stroke: '#3a3a5c', 'stroke-width': 1.5 });
+  nodeLayer.appendChild(apiBox);
+  const apiLbl = svgText(410, 38, 'stateless · infinitely scalable', 10, '#555');
+  nodeLayer.appendChild(apiLbl);
+
+  // Individual Chat API nodes
+  const chatIds = Object.keys(chats);
+  chatApiPositions.forEach((pos, i) => {
+    const cid = chatIds[i];
+    const g = svgEl('g', { id: `node-api-${cid}`, class: 'node-group' });
+    const r = svgEl('rect', { x: pos.x - 55, y: pos.y - 18, width: 110, height: 36,
+      rx: 6, ry: 6, fill: '#1a1f4e', stroke: '#4a4aff', 'stroke-width': 1.5 });
+    const t = svgText(pos.x, pos.y, `Chat${i+1} API`, 12, '#8888ff');
+    g.appendChild(r); g.appendChild(t);
+    nodeLayer.appendChild(g);
+  });
+
+  // Storage nodes
+  drawStorageNode(nodeLayer, 680, 225, 'chat-user-storage', 'chat-user\nstorage', '#3a2200', '#f5a623');
+  drawStorageNode(nodeLayer, 680, 340, 'user-gw-storage',   'user-gw\nstorage',   '#1a2a00', '#7ed321');
+
+  // GW nodes
+  gwList.forEach(gwId => {
+    const gp = GW_POS[gwId];
+    const g  = svgEl('g', { id: `node-${gwId}`, class: 'node-group' });
+    const r  = svgEl('rect', { x: gp.x - 52, y: gp.y - 20, width: 104, height: 40,
+      rx: 6, ry: 6, fill: '#0d2200', stroke: '#3a7a00', 'stroke-width': 1.5 });
+    const t  = svgText(gp.x, gp.y - 5, gwId, 13, '#7ed321');
+    const connectedUsers = Object.keys(gwNodes[gwId].userSocket).join(', ');
+    const sub = svgText(gp.x, gp.y + 9, connectedUsers, 9, '#4a8a00');
+    g.appendChild(r); g.appendChild(t); g.appendChild(sub);
+    nodeLayer.appendChild(g);
+  });
+
+  // User nodes
+  for (const [userId, ud] of Object.entries(users)) {
+    const up = userPos(userId, users, chats);
+    const g  = svgEl('g', { id: `node-user-${userId}`, class: 'node-group' });
+    const r  = svgEl('rect', { x: up.x - 22, y: up.y - 14, width: 44, height: 28,
+      rx: 5, ry: 5, fill: '#1a1a1a', stroke: '#555', 'stroke-width': 1 });
+    const t  = svgText(up.x, up.y - 2, userId, 11, '#ccc');
+    const s  = svgText(up.x, up.y + 10, ud.socketId, 8, '#666');
+    g.appendChild(r); g.appendChild(t); g.appendChild(s);
+    nodeLayer.appendChild(g);
+  }
+
+  // Chat group borders — properly encloses all 4 user boxes
+  const chatBoxes = svgEl('g', { id: 'chat-labels' });
+  chatIds.forEach((cid, i) => {
+    const baseX  = 80 + i * 250;
+    const uids   = chats[cid];
+    const n      = uids.length;
+    // span from leftmost to rightmost user rect + padding
+    const pad    = 8;
+    const boxX   = baseX - 22 - pad;
+    const boxW   = (n - 1) * 52 + 44 + pad * 2;
+    const boxY   = USER_Y - 14 - pad;
+    const boxH   = 28 + pad * 2;
+    const r = svgEl('rect', { x: boxX, y: boxY, width: boxW, height: boxH,
+      rx: 6, ry: 6, fill: 'none', stroke: '#c8301a', 'stroke-width': 1.5, 'stroke-dasharray': '4 3' });
+    const labelX = boxX + boxW / 2;
+    const t = svgText(labelX, boxY - 8, cid, 10, '#c8301a');
+    chatBoxes.appendChild(r); chatBoxes.appendChild(t);
+  });
+  svg.appendChild(chatBoxes);
+
+  // Animated dot layer (on top)
+  const dotLayer = svgEl('g', { id: 'dot-layer' });
+  svg.appendChild(dotLayer);
+}
+
+// ── SVG helpers ────────────────────────────────────────────────────
+function svgEl(tag, attrs = {}) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+function svgText(x, y, text, size = 12, fill = '#ddd') {
+  const el = svgEl('text', { x, y, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+    'font-family': 'Courier New, monospace', 'font-size': size, fill });
+  const lines = text.split('\n');
+  if (lines.length === 1) {
+    el.textContent = text;
+  } else {
+    lines.forEach((line, i) => {
+      const ts = svgEl('tspan', { x, dy: i === 0 ? 0 : 14 });
+      ts.textContent = line;
+      el.appendChild(ts);
+    });
+  }
+  return el;
+}
+function drawEdge(parent, x1, y1, x2, y2, color = '#333') {
+  const line = svgEl('line', { x1, y1, x2, y2, stroke: color, 'stroke-width': 1,
+    'marker-end': 'url(#arrow)' });
+  parent.appendChild(line);
+}
+function drawStorageNode(parent, x, y, id, label, fill, stroke) {
+  const g = svgEl('g', { id: `node-${id}` });
+  const r = svgEl('rect', { x: x - 50, y: y - 24, width: 100, height: 48, rx: 6, fill, stroke, 'stroke-width': 1.5 });
+  const t = svgText(x, y, label, 10, stroke);
+  g.appendChild(r); g.appendChild(t);
+  parent.appendChild(g);
+}
+
+// ── Highlight a node briefly ──────────────────────────────────────
+function highlightNode(nodeId, cls = 'pulse') {
+  const g = document.getElementById(nodeId);
+  if (!g) return;
+  g.classList.remove('pulse', 'pulse-green');
+  void g.offsetWidth;
+  g.classList.add(cls);
+  setTimeout(() => g.classList.remove(cls), 600);
+}
+
+// ── Animate a travelling dot between two absolute positions ──────
+function travelDot(x1, y1, x2, y2, color, durationMs) {
+  return new Promise(resolve => {
+    const dotLayer = document.getElementById('dot-layer');
+    const dot = svgEl('circle', { cx: x1, cy: y1, r: 5, fill: color, opacity: 1 });
+    dotLayer.appendChild(dot);
+
+    const start = performance.now();
+    function frame(now) {
+      const t = Math.min((now - start) / durationMs, 1);
+      const ex = x1 + (x2 - x1) * t;
+      const ey = y1 + (y2 - y1) * t;
+      dot.setAttribute('cx', ex);
+      dot.setAttribute('cy', ey);
+      if (t < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        dot.remove();
+        resolve();
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+// ── Get centre of a named node ────────────────────────────────────
+function nodeCentre(nodeId) {
+  const el = document.getElementById(nodeId);
+  if (!el) return { x: 0, y: 0 };
+  const bb = el.getBoundingClientRect();
+  const svgEl2 = document.getElementById('diagram');
+  const svgBB  = svgEl2.getBoundingClientRect();
+  const vb = svgEl2.viewBox.baseVal;
+  const scaleX = vb.width  / svgBB.width;
+  const scaleY = vb.height / svgBB.height;
+  return {
+    x: (bb.left + bb.width  / 2 - svgBB.left) * scaleX,
+    y: (bb.top  + bb.height / 2 - svgBB.top)  * scaleY,
+  };
+}
+
+/* ================================================================
+   CONTROLLER
+   ================================================================ */
+let world, steps, stepGen;
+let running = false, done = false;
+let autoTimer = null;
+
+function getSpeed() {
+  return parseInt(document.getElementById('speed').value);
+}
+
+function init() {
+  world = buildWorld();
+  buildDiagram(world);
+  steps   = [];
+  stepGen = makeSteps(world);
+  done    = false;
+  running = false;
+  if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+  document.getElementById('btn-run').disabled  = false;
+  document.getElementById('btn-step').disabled = false;
+  document.getElementById('step-label').textContent = '–';
+}
+
+async function processStep() {
+  if (done) return;
+  const result = stepGen.next();
+  if (result.done || (result.value && result.value.type === 'done')) {
+    done = true;
+    document.getElementById('step-label').textContent = 'Done';
+    document.getElementById('btn-run').disabled  = true;
+    document.getElementById('btn-step').disabled = true;
+    return;
+  }
+
+  const step = result.value;
+  steps.push(step);
+  document.getElementById('step-label').textContent = `step ${steps.length}`;
+  await animateStep(step);
+}
+
+async function animateStep(step) {
+  const speed = getSpeed();
+  const dotMs = Math.min(speed * 0.6, 400);
+
+  switch (step.type) {
+    case 'msg-start': {
+      highlightNode(`node-api-${step.chatId}`);
+      break;
+    }
+    case 'query-chat-user': {
+      const from = nodeCentre(`node-api-${step.chatId}`);
+      const to   = nodeCentre('node-chat-user-storage');
+      await travelDot(from.x, from.y, to.x, to.y, '#f5a623', dotMs);
+      highlightNode('node-chat-user-storage');
+      break;
+    }
+    case 'query-user-gw-batch': {
+      // Scatter-gather: fire all 4 requests simultaneously
+      const from = nodeCentre(`node-api-${step.chatId}`);
+      const to   = nodeCentre('node-user-gw-storage');
+      await Promise.all(
+        step.userGWPairs.map((_, i) =>
+          travelDot(from.x, from.y, to.x, to.y, '#7ed321', dotMs)
+        )
+      );
+      highlightNode('node-user-gw-storage');
+      break;
+    }
+    case 'route-to-gw-batch': {
+      // Fanout: route to all GW nodes simultaneously
+      const from = nodeCentre(`node-api-${step.chatId}`);
+      await Promise.all(
+        step.gwTargets.map(({ gwId }) => {
+          const to = nodeCentre(`node-${gwId}`);
+          return travelDot(from.x, from.y, to.x, to.y, '#6ab0f5', dotMs);
+        })
+      );
+      step.gwTargets.forEach(({ gwId }) => highlightNode(`node-${gwId}`));
+      break;
+    }
+    case 'deliver': {
+      const from = nodeCentre(`node-${step.gwId}`);
+      const to   = nodeCentre(`node-user-${step.userId}`);
+      await travelDot(from.x, from.y, to.x, to.y, '#c8f564', dotMs);
+      highlightNode(`node-user-${step.userId}`, 'pulse-green');
+      world.users[step.userId].delivered++;
+      refreshUserNode(step.userId);
+      break;
+    }
+  }
+}
+
+function refreshUserNode(userId) {
+  const ud  = world.users[userId];
+  const sub = document.querySelector(`#node-user-${userId} text:last-child`);
+  if (sub) sub.textContent = `${ud.socketId} ✓${ud.delivered}`;
+}
+
+function scheduleNext() {
+  if (done || !running) return;
+  autoTimer = setTimeout(async () => {
+    await processStep();
+    scheduleNext();
+  }, getSpeed());
+}
+
+// ── button wiring ─────────────────────────────────────────────────
+document.getElementById('btn-run').addEventListener('click', () => {
+  if (running) {
+    running = false;
+    if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+    document.getElementById('btn-run').textContent = '▶ Run';
+    document.getElementById('btn-step').disabled = false;
+  } else {
+    running = true;
+    document.getElementById('btn-run').textContent = '⏸ Pause';
+    document.getElementById('btn-step').disabled = true;
+    scheduleNext();
+  }
+});
+
+document.getElementById('btn-step').addEventListener('click', async () => {
+  if (running || done) return;
+  document.getElementById('btn-step').disabled = true;
+  await processStep();
+  if (!done) document.getElementById('btn-step').disabled = false;
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  running = false;
+  if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+  document.getElementById('btn-run').textContent = '▶ Run';
+  init();
+});
+
+// ── boot ──────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
