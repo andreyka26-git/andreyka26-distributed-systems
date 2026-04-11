@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Gateway.Models;
 
 namespace Gateway.Services;
 
@@ -8,20 +9,21 @@ public class StatsService
 
     public void Record(double latencyMs) => _latenciesMs.Add(latencyMs);
 
-    public object GetStats()
+    public void Reset() => _latenciesMs.Clear();
+
+    public LatencyStats GetLatencyStats()
     {
         var sorted = _latenciesMs.OrderBy(x => x).ToList();
         if (sorted.Count == 0)
-            return new { count = 0, p50 = 0.0, p99 = 0.0, minMs = 0.0, maxMs = 0.0 };
+            return new LatencyStats(0, 0, 0, 0, 0);
 
-        return new
-        {
-            count  = sorted.Count,
-            p50    = Percentile(sorted, 50),
-            p99    = Percentile(sorted, 99),
-            minMs  = sorted[0],
-            maxMs  = sorted[^1]
-        };
+        return new LatencyStats(
+            OperationsPerformed: sorted.Count,
+            P50Ms: Percentile(sorted, 50),
+            P99Ms: Percentile(sorted, 99),
+            MinMs: sorted[0],
+            MaxMs: sorted[^1]
+        );
     }
 
     private static double Percentile(List<double> sorted, double p)

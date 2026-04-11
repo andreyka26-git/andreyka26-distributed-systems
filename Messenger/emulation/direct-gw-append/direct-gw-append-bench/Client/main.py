@@ -36,6 +36,17 @@ import aiohttp
 
 
 # ----------------------------------------------------------------
+# Default configuration  — edit these to change benchmark defaults
+# ----------------------------------------------------------------
+
+GW_URL   = "http://test1.andreyka26.com" # Base URL of the Gateway
+CHATS    = 1
+USERS    = 4
+RATE     = 1.0 # Messages per second per chat
+DURATION = 5.0 # Benchmark duration (seconds)
+
+
+# ----------------------------------------------------------------
 # Shared state  (written from async tasks, read at the end)
 # ----------------------------------------------------------------
 
@@ -56,11 +67,13 @@ async def user_listener(
     chat_id: str,
     gw_ws_url: str,
     stop_event: asyncio.Event,
+    connected_event: asyncio.Event,
 ) -> None:
     """Connect to the Gateway WebSocket and record received messages."""
     url = f"{gw_ws_url}/ws?userId={user_id}&chatId={chat_id}"
     try:
         async with session.ws_connect(url, heartbeat=30) as ws:
+            connected_event.set()
             while not stop_event.is_set():
                 try:
                     msg = await asyncio.wait_for(ws.receive(), timeout=1.0)
@@ -124,6 +137,32 @@ async def chat_sender(
 # Stats helpers
 # ----------------------------------------------------------------
 
+async def fetch_stats(session: aiohttp.ClientSession, gw_http: str) -> dict | None:
+    try:
+        async with session.get(
+            f"{gw_http}/stats",
+            timeout=aiohttp.ClientTimeout(total=5),
+        ) as resp:
+            return await resp.json()
+    except Exception as exc:
+        print(f"Could not fetch /stats from gateway: {exc}")
+        return None
+
+
+async def reset_stats(session: aiohttp.ClientSession, gw_http: str) -> None:
+    try:
+        async with session.post(
+            f"{gw_http}/stats/reset",
+            timeout=aiohttp.ClientTimeout(total=5),
+        ) as resp:
+            if resp.status == 200:
+                print("Gateway stats reset.")
+            else:
+                print(f"Stats reset returned unexpected status {resp.status}")
+    except Exception as exc:
+        print(f"Could not reset /stats on gateway: {exc}")
+
+
 def percentile(data: List[float], p: float) -> float:
     if not data:
         return 0.0
@@ -132,6 +171,39 @@ def percentile(data: List[float], p: float) -> float:
     lo  = int(idx)
     hi  = min(lo + 1, len(s) - 1)
     return s[lo] + (idx - lo) * (s[hi] - s[lo])
+
+
+def print_gw_stats(gw_stats: dict | None, label: str = "Gateway stats") -> None:
+    if not gw_stats:
+        print(f"\n[{label} — unavailable]")
+        return
+
+    lat  = gw_stats.get("deliveryLatency", {})
+    chat = gw_stats.get("chat", {})
+    upc  = chat.get("usersPerChat", {})
+    mpc  = chat.get("messagesPerChat", {})
+
+    print(f"\n[{label}]")
+    print("  Delivery latency (POST receipt → all WS sends done):")
+    print(
+        f"    operations={lat.get('operationsPerformed', 'N/A')}"
+        f"  p50={lat.get('p50Ms', 0):.1f}ms"
+        f"  p99={lat.get('p99Ms', 0):.1f}ms"
+        f"  min={lat.get('minMs', 0):.1f}ms"
+        f"  max={lat.get('maxMs', 0):.1f}ms"
+    )
+    print("  Chat topology:")
+    print(
+        f"    totalChats={chat.get('totalChats', 'N/A')}"
+        f"  usersPerChat p50={upc.get('p50', 0):.0f}"
+        f"  p99={upc.get('p99', 0):.0f}"
+    )
+    print("  Messages processed:")
+    print(
+        f"    total={chat.get('totalMessagesProcessed', 'N/A')}"
+        f"  perChat p50={mpc.get('p50', 0):.0f}"
+        f"  p99={mpc.get('p99', 0):.0f}"
+    )
 
 
 def print_stats(chats: Dict[str, List[str]], gw_stats: dict | None) -> None:
@@ -174,18 +246,7 @@ def print_stats(chats: Dict[str, List[str]], gw_stats: dict | None) -> None:
             f"  p99={percentile(all_latencies, 99):.1f}ms"
         )
 
-    # --- gateway internal stats ---
-    if gw_stats:
-        print(f"\n[Gateway internal processing latency (POST receipt → all sends done)]")
-        print(
-            f"  count={gw_stats.get('count', 'N/A')}"
-            f"  p50={gw_stats.get('p50', 0):.1f}ms"
-            f"  p99={gw_stats.get('p99', 0):.1f}ms"
-            f"  min={gw_stats.get('minMs', 0):.1f}ms"
-            f"  max={gw_stats.get('maxMs', 0):.1f}ms"
-        )
-    else:
-        print("\n[Gateway stats unavailable]")
+    print_gw_stats(gw_stats, label="Gateway internal stats (this run)")
 
 
 # ----------------------------------------------------------------
@@ -194,20 +255,20 @@ def print_stats(chats: Dict[str, List[str]], gw_stats: dict | None) -> None:
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Gateway benchmark client")
-    parser.add_argument("--gw-url",  default="http://localhost:5000",
-                        help="Base HTTP URL of the Gateway  (default: http://localhost:5000)")
-    parser.add_argument("--chats",   type=int,   default=3,
-                        help="Number of independent chats  (default: 3)")
-    parser.add_argument("--users",   type=int,   default=4,
-                        help="Users per chat               (default: 4)")
-    parser.add_argument("--rate",    type=float, default=10.0,
-                        help="Messages per second per chat (default: 10)")
-    parser.add_argument("--duration", type=float, default=30.0,
-                        help="Benchmark duration seconds   (default: 30)")
+    parser.add_argument("--gw-url",   default=GW_URL,
+                        help=f"Base HTTP URL of the Gateway  (default: {GW_URL})")
+    parser.add_argument("--chats",    type=int,   default=CHATS,
+                        help=f"Number of independent chats  (default: {CHATS})")
+    parser.add_argument("--users",    type=int,   default=USERS,
+                        help=f"Users per chat               (default: {USERS})")
+    parser.add_argument("--rate",     type=float, default=RATE,
+                        help=f"Messages per second per chat (default: {RATE})")
+    parser.add_argument("--duration", type=float, default=DURATION,
+                        help=f"Benchmark duration seconds   (default: {DURATION})")
     args = parser.parse_args()
 
     gw_http = args.gw_url.rstrip("/")
-    gw_ws   = gw_http.replace("http://", "ws://").replace("https://", "wss://")
+    gw_ws   = gw_http.replace("http://", "ws://")
 
     # Build chat -> [userId] mapping.
     # Each user belongs to exactly one chat.
@@ -231,19 +292,49 @@ async def main() -> None:
 
         # 1. Connect all users via WebSocket
         print("Connecting users…")
-        ws_tasks = [
-            asyncio.create_task(
-                user_listener(session, uid, chat_id, gw_ws, stop_event)
-            )
-            for chat_id, users in chats.items()
-            for uid in users
+        connected_events: Dict[str, asyncio.Event] = {}
+        ws_tasks = []
+        for chat_id, users in chats.items():
+            for uid in users:
+                ev = asyncio.Event()
+                connected_events[uid] = ev
+                ws_tasks.append(
+                    asyncio.create_task(
+                        user_listener(session, uid, chat_id, gw_ws, stop_event, ev)
+                    )
+                )
+
+        # Wait up to 5s for every user to confirm a successful WebSocket handshake.
+        connect_timeout = 5.0
+        wait_tasks = [
+            asyncio.create_task(ev.wait())
+            for ev in connected_events.values()
         ]
+        _, pending = await asyncio.wait(wait_tasks, timeout=connect_timeout)
 
-        # Brief pause so all WebSocket handshakes complete before we start sending.
-        await asyncio.sleep(1.5)
-        print(f"All {total_users} users connected.  Starting senders…\n")
+        failed_users = [
+            uid for uid, ev in connected_events.items() if not ev.is_set()
+        ]
+        if failed_users:
+            print(f"\nERROR: {len(failed_users)} user(s) failed to connect: {failed_users}")
+            print("Aborting benchmark — fix the WebSocket connectivity issue first.")
+            stop_event.set()
+            for t in pending:
+                t.cancel()
+            await asyncio.gather(*ws_tasks, return_exceptions=True)
+            return
 
-        # 2. Start one ChatAPI sender per chat — all fire simultaneously
+        print(f"All {total_users} users connected.")
+
+        # 2. Fetch and display any leftover stats from a previous run, then reset.
+        pre_run_stats = await fetch_stats(session, gw_http)
+        print_gw_stats(pre_run_stats, label="Gateway stats before this run (previous run leftover)")
+        await reset_stats(session, gw_http)
+        print()
+
+        print("Starting senders…\n")
+
+        # 3. Start one ChatAPI sender per chat — all fire simultaneously
         sender_tasks = [
             asyncio.create_task(
                 chat_sender(session, chat_id, users[0], gw_http, args.rate, args.duration)
@@ -251,27 +342,19 @@ async def main() -> None:
             for chat_id, users in chats.items()
         ]
 
-        # 3. Wait for all senders to finish
+        # 4. Wait for all senders to finish
         await asyncio.gather(*sender_tasks)
         print("\nAll senders done.  Waiting for in-flight messages…")
 
         # Grace period: let the last WebSocket frames arrive
         await asyncio.sleep(2.0)
 
-        # 4. Signal WebSocket listeners to stop and wait
+        # 5. Signal WebSocket listeners to stop and wait
         stop_event.set()
         await asyncio.gather(*ws_tasks, return_exceptions=True)
 
-        # 5. Fetch Gateway's own stats
-        gw_stats = None
-        try:
-            async with session.get(
-                f"{gw_http}/stats",
-                timeout=aiohttp.ClientTimeout(total=5),
-            ) as resp:
-                gw_stats = await resp.json()
-        except Exception as exc:
-            print(f"Could not fetch /stats from gateway: {exc}")
+        # 6. Fetch Gateway's final stats for this run
+        gw_stats = await fetch_stats(session, gw_http)
 
     print_stats(chats, gw_stats)
 

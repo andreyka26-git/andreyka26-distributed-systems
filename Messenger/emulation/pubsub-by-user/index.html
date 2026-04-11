@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pub/Sub by User — Simulation</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #080b12;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    h1 {
+      text-align: center;
+      padding: 10px 18px;
+      font-size: 15px;
+      letter-spacing: 3px;
+      color: #8899cc;
+      border-bottom: 1px solid #1e2a44;
+      flex-shrink: 0;
+      background: linear-gradient(180deg, #0d1220 0%, #080b12 100%);
+      text-transform: uppercase;
+    }
+
+    #canvas-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    svg#diagram {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── controls bar ─────────────────────────────────────────────── */
+    #controls {
+      padding: 8px 16px;
+      border-top: 1px solid #1e2a44;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-shrink: 0;
+      background: #0a0e18;
+    }
+
+    button {
+      background: linear-gradient(180deg, #1a2240 0%, #111830 100%);
+      border: 1px solid #2a3a64;
+      color: #99aadd;
+      padding: 5px 14px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 11px;
+      border-radius: 4px;
+      transition: all 0.15s;
+      letter-spacing: 1px;
+    }
+    button:hover  { background: linear-gradient(180deg, #2a3a60 0%, #1a2848 100%); color: #ccd8ff; border-color: #4455aa; }
+    button:active { background: #1a2240; }
+    button:disabled { opacity: 0.3; cursor: default; }
+
+    #speed-label {
+      color: #556688;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      letter-spacing: 1px;
+    }
+    input[type=range] {
+      width: 80px;
+      accent-color: #5577cc;
+    }
+    #step-label {
+      color: #445577;
+      font-size: 11px;
+      margin-left: auto;
+      letter-spacing: 1px;
+    }
+
+    /* ── animations ───────────────────────────────────────────────── */
+    .pulse {
+      animation: pulse-anim 0.55s ease-out;
+    }
+    @keyframes pulse-anim {
+      0%   { filter: drop-shadow(0 0 0px #6699ff); }
+      45%  { filter: drop-shadow(0 0 12px #6699ff) drop-shadow(0 0 4px #aabbff); }
+      100% { filter: drop-shadow(0 0 0px #6699ff); }
+    }
+    .pulse-green {
+      animation: pulse-green-anim 0.55s ease-out;
+    }
+    @keyframes pulse-green-anim {
+      0%   { filter: drop-shadow(0 0 0px #44cc88); }
+      45%  { filter: drop-shadow(0 0 12px #44cc88) drop-shadow(0 0 4px #88ffcc); }
+      100% { filter: drop-shadow(0 0 0px #44cc88); }
+    }
+    .pulse-orange {
+      animation: pulse-orange-anim 0.55s ease-out;
+    }
+    @keyframes pulse-orange-anim {
+      0%   { filter: drop-shadow(0 0 0px #dd8833); }
+      45%  { filter: drop-shadow(0 0 12px #dd8833) drop-shadow(0 0 4px #ffcc88); }
+      100% { filter: drop-shadow(0 0 0px #dd8833); }
+    }
+  </style>
+</head>
+<body>
+
+<h1>Pub/Sub by User &mdash; Messenger Simulation</h1>
+
+<div id="canvas-wrap">
+  <svg id="diagram" viewBox="0 0 1000 530" preserveAspectRatio="xMidYMid meet"></svg>
+</div>
+
+<div id="controls">
+  <button id="btn-run">&#9654;&nbsp;Run</button>
+  <button id="btn-step" disabled>Step</button>
+  <button id="btn-reset">Reset</button>
+  <label id="speed-label">
+    Speed
+    <input type="range" id="speed" min="100" max="2000" step="100" value="700" />
+  </label>
+  <span id="step-label">—</span>
+</div>
+
+<script>
+/* ================================================================
+   CONFIG
+   ================================================================ */
+const CONFIG = {
+  NUM_CHATS:            3,
+  USERS_PER_CHAT:       4,
+  NUM_GATEWAY_NODES:    4,
+};
+
+/* ================================================================
+   WORLD
+   ================================================================ */
+function buildWorld() {
+  const { NUM_CHATS, USERS_PER_CHAT, NUM_GATEWAY_NODES } = CONFIG;
+
+  const gwIds   = Array.from({ length: NUM_GATEWAY_NODES }, (_, i) => `GW${i + 1}`);
+  const gwNodes = {};
+  gwIds.forEach(id => { gwNodes[id] = { userSocket: {}, subscribedUsers: [] }; });
+
+  // chatId -> [userId]  (simple map, no sharding needed for demo)
+  const chatUserMap = {};
+
+  const users      = {};   // userId -> { gwId, socketId, delivered }
+  const userQueues = {};   // userId -> { subscribedGw }
+  const chats      = {};
+
+  let sockCtr = 1, userCtr = 1;
+
+  for (let ci = 0; ci < NUM_CHATS; ci++) {
+    const cid = `chat${ci + 1}`;
+    chats[cid]      = [];
+    chatUserMap[cid] = [];
+
+    for (let ui = 0; ui < USERS_PER_CHAT; ui++) {
+      const uid   = `u${userCtr}`;
+      const gwId  = gwIds[(userCtr - 1) % NUM_GATEWAY_NODES];
+      const sock  = `s${sockCtr}`;
+      userCtr++;
+      sockCtr++;
+
+      users[uid] = { gwId, socketId: sock, delivered: 0 };
+      chatUserMap[cid].push(uid);
+      chats[cid].push(uid);
+
+      // GW subscribes to this user's queue at connect time
+      userQueues[uid] = { subscribedGw: gwId };
+      gwNodes[gwId].userSocket[uid]    = sock;
+      gwNodes[gwId].subscribedUsers.push(uid);
+    }
+  }
+
+  const getUsers = cid => chatUserMap[cid] || [];
+
+  return { users, chats, gwNodes, userQueues, getUsers };
+}
+
+/* ================================================================
+   STEPS
+   ================================================================ */
+function* makeSteps(world) {
+  const { users, chats, gwNodes, userQueues, getUsers } = world;
+
+  const messages = [];
+  for (const [cid, uids] of Object.entries(chats)) {
+    messages.push({ chatId: cid, text: 'Hello everyone!', sender: uids[0] });
+    messages.push({ chatId: cid, text: 'How are you?',    sender: uids[1] });
+  }
+
+  for (let mi = 0; mi < messages.length; mi++) {
+    const { chatId, text, sender } = messages[mi];
+    yield { type: 'msg-start', chatId, text, sender, msgIdx: mi, total: messages.length };
+
+    // ① Query chat-user storage
+    const chatUsers = getUsers(chatId);
+    yield { type: 'query-chat-user', chatId, users: chatUsers };
+
+    // ② ChatAPI enqueues to each participant's personal queue
+    const enqueues = chatUsers.map(uid => ({ userId: uid }));
+    yield { type: 'enqueue-batch', chatId, enqueues, text };
+
+    // ③ Each queue notifies its subscribed GW
+    const notifications = chatUsers.map(uid => ({
+      userId: uid,
+      gwId:   userQueues[uid].subscribedGw,
+    }));
+    yield { type: 'notify-gw-batch', chatId, notifications, text };
+
+    // ④ Each GW delivers to its user via socket
+    const delivers = chatUsers.map(uid => ({
+      userId:   uid,
+      gwId:     userQueues[uid].subscribedGw,
+      socketId: users[uid].socketId,
+    }));
+    yield { type: 'deliver-batch', chatId, delivers, text };
+  }
+
+  yield { type: 'done' };
+}
+
+/* ================================================================
+   LAYOUT CONSTANTS
+   ================================================================ */
+// viewBox: 1000 × 530
+const API_Y   = 72;
+const QUEUE_Y = 228;
+const GW_Y    = 368;
+const USER_Y  = 470;
+
+// 12 users/queues — evenly spaced
+// indices 0..11 map to u1..u12
+function ux(i) { return 42 + i * 79; }   // 42, 121, 200, 279, 358, 437, 516, 595, 674, 753, 832, 911
+
+// 3 Chat APIs — centred over their chat's 4 users
+const CHAT_API_X = [
+  (ux(0) + ux(1) + ux(2) + ux(3)) / 4,   // chat1  ≈ 160
+  (ux(4) + ux(5) + ux(6) + ux(7)) / 4,   // chat2  ≈ 476
+  (ux(8) + ux(9) + ux(10)+ ux(11))/ 4,   // chat3  ≈ 792
+];
+
+// chat-user storage — right of the diagram between API and queue rows
+const STOR_X = 962, STOR_Y = 150;
+
+// 4 GW nodes — evenly spaced
+const GW_POS = {
+  GW1: { x: 155, y: GW_Y },
+  GW2: { x: 385, y: GW_Y },
+  GW3: { x: 615, y: GW_Y },
+  GW4: { x: 845, y: GW_Y },
+};
+
+/* ================================================================
+   DIAGRAM
+   ================================================================ */
+function buildDiagram(world) {
+  const svg = document.getElementById('diagram');
+  svg.innerHTML = '';
+
+  const { users, chats, gwNodes, userQueues } = world;
+
+  /* ── defs ───────────────────────────────────────────────────── */
+  const defs = svgEl('defs');
+  svg.appendChild(defs);
+
+  const mk = svgEl('marker', { id: 'arrow', markerWidth: 7, markerHeight: 7, refX: 5, refY: 3, orient: 'auto' });
+  mk.appendChild(svgEl('path', { d: 'M0,0.5 L0,5.5 L7,3 z', fill: '#2a3a5a' }));
+  defs.appendChild(mk);
+
+  const mkB = svgEl('marker', { id: 'arrow-bright', markerWidth: 7, markerHeight: 7, refX: 5, refY: 3, orient: 'auto' });
+  mkB.appendChild(svgEl('path', { d: 'M0,0.5 L0,5.5 L7,3 z', fill: '#5577cc' }));
+  defs.appendChild(mkB);
+
+  const flt = svgEl('filter', { id: 'glow', x: '-20%', y: '-20%', width: '140%', height: '140%' });
+  const fe1 = svgEl('feGaussianBlur', { in: 'SourceGraphic', stdDeviation: '2', result: 'blur' });
+  const fe2 = svgEl('feMerge');
+  fe2.appendChild(svgEl('feMergeNode', { in: 'blur' }));
+  fe2.appendChild(svgEl('feMergeNode', { in: 'SourceGraphic' }));
+  flt.appendChild(fe1); flt.appendChild(fe2); defs.appendChild(flt);
+
+  addGrad(defs, 'grad-api',   '#1e2860', '#0e153a');
+  addGrad(defs, 'grad-stor',  '#2e1a00', '#180d00');
+  addGrad(defs, 'grad-queue', '#1e1400', '#0f0a00');
+  addGrad(defs, 'grad-gw',    '#0a2216', '#040f0a');
+  addGrad(defs, 'grad-user',  '#14182a', '#0a0d1a');
+
+  /* ── edge layer ─────────────────────────────────────────────── */
+  const edgeLayer = svgEl('g', { id: 'edges', opacity: '0.45' });
+  svg.appendChild(edgeLayer);
+
+  const chatIds = Object.keys(chats);
+
+  // ChatAPIs → chat-user storage
+  CHAT_API_X.forEach(ax => {
+    drawCurve(edgeLayer, ax, API_Y + 18, STOR_X, STOR_Y + 22, '#1a2844');
+  });
+
+  // ChatAPIs → their 4 user queues
+  chatIds.forEach((cid, ci) => {
+    const ax = CHAT_API_X[ci];
+    chats[cid].forEach(uid => {
+      const idx = parseInt(uid.replace('u', '')) - 1;
+      drawCurve(edgeLayer, ax, API_Y + 18, ux(idx), QUEUE_Y - 18, '#1e2e14');
+    });
+  });
+
+  // User queues → subscribed GW (subscription lines)
+  for (const [uid, qInfo] of Object.entries(userQueues)) {
+    const idx  = parseInt(uid.replace('u', '')) - 1;
+    const gp   = GW_POS[qInfo.subscribedGw];
+    drawCurve(edgeLayer, ux(idx), QUEUE_Y + 18, gp.x, gp.y - 20, '#102510');
+  }
+
+  // GWs → their users
+  for (const [gwId, gw] of Object.entries(gwNodes)) {
+    const gp = GW_POS[gwId];
+    for (const uid of Object.keys(gw.userSocket)) {
+      const idx = parseInt(uid.replace('u', '')) - 1;
+      drawCurve(edgeLayer, gp.x, gp.y + 20, ux(idx), USER_Y - 14, '#0e1a22');
+    }
+  }
+
+  /* ── node layer ─────────────────────────────────────────────── */
+  const nodeLayer = svgEl('g', { id: 'nodes' });
+  svg.appendChild(nodeLayer);
+
+  // Chat API nodes
+  chatIds.forEach((cid, i) => {
+    const ax = CHAT_API_X[i];
+    const g  = svgEl('g', { id: `node-api-${cid}` });
+    g.appendChild(svgEl('rect', { x: ax - 56, y: API_Y - 18, width: 112, height: 36, rx: 7,
+      fill: 'url(#grad-api)', stroke: '#3a50cc', 'stroke-width': 1.2 }));
+    g.appendChild(svgText(ax, API_Y - 3, `Chat${i + 1} API`, 11, '#8899ee'));
+    nodeLayer.appendChild(g);
+  });
+
+  // Chat-user storage (only one — no user-gw storage needed)
+  drawStorage(nodeLayer, STOR_X, STOR_Y, 'chat-user-storage', 'chat-user\nstorage', 'url(#grad-stor)', '#c87820');
+
+  // Row label for queues
+  nodeLayer.appendChild(svgText(ux(11) + 55, QUEUE_Y, 'USER QUEUES', 8, '#2a3a14'));
+
+  // User queue nodes (12)
+  const allUserIds = Object.keys(users);
+  allUserIds.forEach(uid => {
+    const idx = parseInt(uid.replace('u', '')) - 1;
+    const x   = ux(idx);
+    const g   = svgEl('g', { id: `node-queue-${uid}` });
+    g.appendChild(svgEl('rect', { x: x - 24, y: QUEUE_Y - 17, width: 48, height: 34, rx: 4,
+      fill: 'url(#grad-queue)', stroke: '#886620', 'stroke-width': 1 }));
+    g.appendChild(svgText(x, QUEUE_Y - 5, `q:${uid}`, 9, '#cc9933'));
+    g.appendChild(svgText(x, QUEUE_Y + 8, userQueues[uid].subscribedGw, 7, '#665511'));
+    nodeLayer.appendChild(g);
+  });
+
+  // GW nodes
+  const gwList = Object.keys(GW_POS);
+  gwList.forEach(gwId => {
+    const gp = GW_POS[gwId];
+    const g  = svgEl('g', { id: `node-${gwId}` });
+    g.appendChild(svgEl('rect', { x: gp.x - 52, y: gp.y - 20, width: 104, height: 40, rx: 7,
+      fill: 'url(#grad-gw)', stroke: '#1e7a44', 'stroke-width': 1.2 }));
+    g.appendChild(svgText(gp.x, gp.y - 6, gwId, 12, '#44cc77'));
+    const uList = Object.keys(gwNodes[gwId].userSocket).join(' ');
+    g.appendChild(svgText(gp.x, gp.y + 9, uList, 8, '#2a6636'));
+    nodeLayer.appendChild(g);
+  });
+
+  // GW row label
+  nodeLayer.appendChild(svgText(GW_POS.GW4.x + 100, GW_Y, 'GATEWAY NODES', 8, '#1a3a28'));
+
+  // User nodes (12)
+  allUserIds.forEach(uid => {
+    const idx = parseInt(uid.replace('u', '')) - 1;
+    const x   = ux(idx);
+    const ud  = users[uid];
+    const g   = svgEl('g', { id: `node-user-${uid}` });
+    g.appendChild(svgEl('rect', { x: x - 22, y: USER_Y - 14, width: 44, height: 28, rx: 5,
+      fill: 'url(#grad-user)', stroke: '#2a2f50', 'stroke-width': 1 }));
+    g.appendChild(svgText(x, USER_Y - 3, uid, 10, '#8899bb'));
+    g.appendChild(svgText(x, USER_Y + 9, ud.socketId, 8, '#3a4466'));
+    nodeLayer.appendChild(g);
+  });
+
+  // Chat group borders around users
+  const chatBoxes = svgEl('g', { id: 'chat-labels' });
+  chatIds.forEach((cid, ci) => {
+    const uids = chats[cid];
+    const xs   = uids.map(uid => ux(parseInt(uid.replace('u', '')) - 1));
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const pad  = 9;
+    chatBoxes.appendChild(svgEl('rect', {
+      x: minX - 22 - pad, y: USER_Y - 14 - pad,
+      width: maxX - minX + 44 + pad * 2, height: 28 + pad * 2,
+      rx: 7, fill: 'none', stroke: '#882010', 'stroke-width': 1.2, 'stroke-dasharray': '5 3',
+    }));
+    chatBoxes.appendChild(svgText(minX - 22 - pad + (maxX - minX + 44 + pad * 2) / 2, USER_Y - 14 - pad - 9, cid.toUpperCase(), 9, '#883322'));
+  });
+  svg.appendChild(chatBoxes);
+
+  // Dot layer on top
+  svg.appendChild(svgEl('g', { id: 'dot-layer' }));
+}
+
+/* ── SVG helpers ─────────────────────────────────────────────────── */
+function svgEl(tag, attrs = {}) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+function svgText(x, y, text, size = 12, fill = '#ddd') {
+  const el = svgEl('text', { x, y, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+    'font-family': 'Courier New, monospace', 'font-size': size, fill });
+  const lines = text.split('\n');
+  if (lines.length === 1) { el.textContent = text; }
+  else { lines.forEach((l, i) => { const ts = svgEl('tspan', { x, dy: i === 0 ? 0 : 13 }); ts.textContent = l; el.appendChild(ts); }); }
+  return el;
+}
+function drawCurve(parent, x1, y1, x2, y2, color = '#1e2a44') {
+  const my   = (y1 + y2) / 2;
+  const path = svgEl('path', {
+    d: `M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`,
+    stroke: color, 'stroke-width': 1, fill: 'none', 'marker-end': 'url(#arrow)',
+  });
+  parent.appendChild(path);
+}
+function drawStorage(parent, x, y, id, label, fill, stroke) {
+  const g = svgEl('g', { id: `node-${id}` });
+  g.appendChild(svgEl('rect',    { x: x - 46, y: y - 22, width: 92, height: 44, rx: 5, fill, stroke, 'stroke-width': 1.2 }));
+  g.appendChild(svgEl('ellipse', { cx: x, cy: y - 22, rx: 46, ry: 7, fill, stroke, 'stroke-width': 1.2 }));
+  g.appendChild(svgText(x, y + 2, label, 9, stroke));
+  parent.appendChild(g);
+}
+function addGrad(defs, id, c1, c2) {
+  const g  = svgEl('linearGradient', { id, x1: '0', y1: '0', x2: '0', y2: '1' });
+  const s1 = svgEl('stop', { offset: '0%' });   s1.setAttribute('stop-color', c1);
+  const s2 = svgEl('stop', { offset: '100%' }); s2.setAttribute('stop-color', c2);
+  g.appendChild(s1); g.appendChild(s2); defs.appendChild(g);
+}
+
+/* ── Highlight ───────────────────────────────────────────────────── */
+function highlightNode(id, cls = 'pulse') {
+  const g = document.getElementById(id);
+  if (!g) return;
+  g.classList.remove('pulse', 'pulse-green', 'pulse-orange');
+  void g.offsetWidth;
+  g.classList.add(cls);
+  setTimeout(() => g.classList.remove(cls), 650);
+}
+
+/* ── Travelling dot ──────────────────────────────────────────────── */
+function travelDot(x1, y1, x2, y2, color, ms) {
+  return new Promise(resolve => {
+    const layer = document.getElementById('dot-layer');
+    const dot   = svgEl('circle', { cx: x1, cy: y1, r: 4, fill: color });
+    const glow  = svgEl('circle', { cx: x1, cy: y1, r: 6, fill: color, opacity: '0.25' });
+    layer.appendChild(glow);
+    layer.appendChild(dot);
+    const t0 = performance.now();
+    function frame(now) {
+      const t  = Math.min((now - t0) / ms, 1);
+      const ex = x1 + (x2 - x1) * t, ey = y1 + (y2 - y1) * t;
+      dot.setAttribute('cx', ex);  dot.setAttribute('cy', ey);
+      glow.setAttribute('cx', ex); glow.setAttribute('cy', ey);
+      if (t < 1) requestAnimationFrame(frame);
+      else { dot.remove(); glow.remove(); resolve(); }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+/* ── Node centre (SVG coords) ────────────────────────────────────── */
+function nodeCentre(id) {
+  const el  = document.getElementById(id);
+  if (!el) return { x: 0, y: 0 };
+  const bb  = el.getBoundingClientRect();
+  const svgE = document.getElementById('diagram');
+  const sb  = svgE.getBoundingClientRect(), vb = svgE.viewBox.baseVal;
+  const sx  = vb.width / sb.width, sy = vb.height / sb.height;
+  return { x: (bb.left + bb.width / 2 - sb.left) * sx, y: (bb.top + bb.height / 2 - sb.top) * sy };
+}
+
+/* ================================================================
+   CONTROLLER
+   ================================================================ */
+let world, steps, stepGen, running = false, done = false, autoTimer = null;
+
+function getSpeed() { return parseInt(document.getElementById('speed').value); }
+
+function init() {
+  world   = buildWorld();
+  buildDiagram(world);
+  steps   = [];
+  stepGen = makeSteps(world);
+  done    = false;
+  running = false;
+  if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+  document.getElementById('btn-run').disabled  = false;
+  document.getElementById('btn-step').disabled = false;
+  document.getElementById('step-label').textContent = '—';
+}
+
+async function processStep() {
+  if (done) return;
+  const r = stepGen.next();
+  if (r.done || r.value?.type === 'done') {
+    done = true;
+    document.getElementById('step-label').textContent = 'done';
+    document.getElementById('btn-run').disabled  = true;
+    document.getElementById('btn-step').disabled = true;
+    return;
+  }
+  steps.push(r.value);
+  document.getElementById('step-label').textContent = `step ${steps.length}`;
+  await animateStep(r.value);
+}
+
+async function animateStep(step) {
+  const ms = Math.min(getSpeed() * 0.6, 420);
+
+  switch (step.type) {
+
+    case 'msg-start':
+      highlightNode(`node-api-${step.chatId}`);
+      break;
+
+    case 'query-chat-user': {
+      const f = nodeCentre(`node-api-${step.chatId}`), t = nodeCentre('node-chat-user-storage');
+      await travelDot(f.x, f.y, t.x, t.y, '#c87820', ms);
+      highlightNode('node-chat-user-storage');
+      break;
+    }
+
+    case 'enqueue-batch': {
+      // ChatAPI fans out to each participant's personal queue
+      const f = nodeCentre(`node-api-${step.chatId}`);
+      await Promise.all(step.enqueues.map(({ userId }) => {
+        const t = nodeCentre(`node-queue-${userId}`);
+        return travelDot(f.x, f.y, t.x, t.y, '#cc8822', ms);
+      }));
+      step.enqueues.forEach(({ userId }) => highlightNode(`node-queue-${userId}`, 'pulse-orange'));
+      break;
+    }
+
+    case 'notify-gw-batch': {
+      // Each queue notifies its subscribed GW
+      await Promise.all(step.notifications.map(({ userId, gwId }) => {
+        const f = nodeCentre(`node-queue-${userId}`), t = nodeCentre(`node-${gwId}`);
+        return travelDot(f.x, f.y, t.x, t.y, '#5599ee', ms);
+      }));
+      const gwSet = new Set(step.notifications.map(n => n.gwId));
+      gwSet.forEach(gwId => highlightNode(`node-${gwId}`));
+      break;
+    }
+
+    case 'deliver-batch': {
+      // Each GW delivers to its user via socket
+      await Promise.all(step.delivers.map(({ userId, gwId, socketId }) => {
+        const f = nodeCentre(`node-${gwId}`), t = nodeCentre(`node-user-${userId}`);
+        return travelDot(f.x, f.y, t.x, t.y, '#55dd99', ms).then(() => {
+          highlightNode(`node-user-${userId}`, 'pulse-green');
+          world.users[userId].delivered++;
+          const sub = document.querySelector(`#node-user-${userId} text:last-child`);
+          if (sub) sub.textContent = `${socketId} \u2713`;
+        });
+      }));
+      break;
+    }
+  }
+}
+
+function scheduleNext() {
+  if (done || !running) return;
+  autoTimer = setTimeout(async () => { await processStep(); scheduleNext(); }, getSpeed());
+}
+
+document.getElementById('btn-run').addEventListener('click', () => {
+  if (running) {
+    running = false;
+    if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+    document.getElementById('btn-run').textContent = '\u25B6\u00A0Run';
+    document.getElementById('btn-step').disabled = false;
+  } else {
+    running = true;
+    document.getElementById('btn-run').textContent = '\u23F8\u00A0Pause';
+    document.getElementById('btn-step').disabled = true;
+    scheduleNext();
+  }
+});
+document.getElementById('btn-step').addEventListener('click', async () => {
+  if (running || done) return;
+  document.getElementById('btn-step').disabled = true;
+  await processStep();
+  if (!done) document.getElementById('btn-step').disabled = false;
+});
+document.getElementById('btn-reset').addEventListener('click', () => {
+  running = false;
+  if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+  document.getElementById('btn-run').textContent = '\u25B6\u00A0Run';
+  init();
+});
+
+init();
+</script>
+</body>
+</html>

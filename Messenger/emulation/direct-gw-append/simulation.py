@@ -9,7 +9,7 @@ Flow per message:
   4. ChatAPI routes to each relevant GW.
   5. GW resolves its local users for the chat (in-memory).
   6. GW resolves socket per user (in-memory).
-  7. GW delivers to each socket, retrying on failure.
+  7. GW delivers to each socket.
 """
 
 import hashlib
@@ -20,14 +20,15 @@ from typing import Dict, List, Optional
 # CONFIGURATION
 # ----------------------------------------------------------------
 
-NUM_CHATS            = 3   # also the number of ChatAPI instances
-USERS_PER_CHAT       = 4
-NUM_GATEWAY_NODES    = 4
-NUM_CHAT_USER_SHARDS = 3
-NUM_USER_GW_SHARDS   = 4
-MAX_DELIVERY_RETRIES = 3
+NUM_CHATS            = 10  # also the number of ChatAPI instances
+USERS_PER_CHAT       = 10000
 
-DETAILED_OUTPUT      = True   # False → summary percentile stats only
+NUM_GATEWAY_NODES    = 1000
+NUM_CHAT_USER_SHARDS = 1000
+NUM_USER_GW_SHARDS   = 1000
+MESSAGES_PER_CHAT    = 10
+
+DETAILED_OUTPUT      = False   # False → summary percentile stats only
 
 # ----------------------------------------------------------------
 # LOGGING
@@ -62,39 +63,17 @@ def _percentile(data: List[float], p: float) -> float:
 # ----------------------------------------------------------------
 
 class Socket:
-    """
-    Simulated WebSocket connection between a User and a GW node.
+    """Simulated WebSocket connection between a User and a GW node."""
 
-    A *flaky* socket fails on the very first delivery attempt for each
-    unique message, then succeeds on retry — demonstrating retry logic.
-    """
-
-    def __init__(self, socket_id: str, user_id: str, flaky: bool = False) -> None:
+    def __init__(self, socket_id: str, user_id: str) -> None:
         self.socket_id = socket_id
         self.user_id   = user_id
-        self.flaky     = flaky
 
-        self._attempted: set = set()          # keys of already-tried (chat,msg) pairs
-        self.messages_received:       List[dict] = []
-        self.total_delivery_attempts: int = 0
-        self.failed_attempts:         int = 0
-        self.successful_deliveries:   int = 0
+        self.messages_received:     List[dict] = []
+        self.successful_deliveries: int = 0
 
-    def try_deliver(self, message: str, chat_id: str) -> bool:
-        """Push a message through the socket. Returns True on success."""
-        self.total_delivery_attempts += 1
-        key = f"{chat_id}:{message}"
-
-        if self.flaky and key not in self._attempted:
-            self._attempted.add(key)
-            self.failed_attempts += 1
-            log(
-                f"SOCKET {self.socket_id}",
-                f"FAILED delivery to {self.user_id} — flaky socket, retrying…",
-                level=4,
-            )
-            return False
-
+    def deliver(self, message: str, chat_id: str) -> None:
+        """Push a message through the socket."""
         self.messages_received.append({"chat_id": chat_id, "message": message})
         self.successful_deliveries += 1
         log(
@@ -102,11 +81,9 @@ class Socket:
             f"OK Delivered to {self.user_id}: '{message}' in {chat_id}",
             level=4,
         )
-        return True
 
     def __repr__(self) -> str:
-        flag = " [FLAKY]" if self.flaky else ""
-        return f"Socket({self.socket_id}, user={self.user_id}{flag})"
+        return f"Socket({self.socket_id}, user={self.user_id})"
 
 
 # ----------------------------------------------------------------
@@ -205,7 +182,7 @@ class GatewayNode:
     When ChatAPI calls deliver_chat_message(), the GW:
       1. Looks up its local users for the chat (chat_users).
       2. Resolves the socket for each user (user_socket).
-      3. Pushes with retry up to MAX_DELIVERY_RETRIES.
+      3. Delivers to each socket.
     """
 
     def __init__(self, gw_id: str) -> None:
@@ -217,7 +194,6 @@ class GatewayNode:
         self.total_connections  = 0
         self.messages_received  = 0
         self.messages_delivered = 0
-        self.retry_count        = 0
 
     @property
     def active_connections(self) -> int:
@@ -259,23 +235,9 @@ class GatewayNode:
 
             log(f"GW {self.gw_id}", f"Resolving socket for {user_id} -> {socket.socket_id}", level=2)
 
-            # ③ Deliver with retry
-            delivered = False
-            for attempt in range(1, MAX_DELIVERY_RETRIES + 1):
-                if attempt > 1:
-                    self.retry_count += 1
-                    log(f"GW {self.gw_id}", f"<- Retry #{attempt - 1} for {user_id}", level=3)
-                if socket.try_deliver(message, chat_id):
-                    self.messages_delivered += 1
-                    delivered = True
-                    break
-
-            if not delivered:
-                log(
-                    f"GW {self.gw_id}",
-                    f"FAIL FAILED to deliver to {user_id} after {MAX_DELIVERY_RETRIES} attempts",
-                    level=2,
-                )
+            # ③ Deliver
+            socket.deliver(message, chat_id)
+            self.messages_delivered += 1
 
 
 # ----------------------------------------------------------------
@@ -350,10 +312,12 @@ class Simulation:
         num_gw_nodes:      int = NUM_GATEWAY_NODES,
         num_cu_shards:     int = NUM_CHAT_USER_SHARDS,
         num_ugw_shards:    int = NUM_USER_GW_SHARDS,
+        messages_per_chat: int = MESSAGES_PER_CHAT,
     ) -> None:
-        self.num_chats      = num_chats
-        self.users_per_chat = users_per_chat
-        self.num_gw_nodes   = num_gw_nodes
+        self.num_chats         = num_chats
+        self.users_per_chat    = users_per_chat
+        self.num_gw_nodes      = num_gw_nodes
+        self.messages_per_chat = messages_per_chat
 
         self.chat_user_storage = ChatUserStorage(num_cu_shards)
         self.user_gw_storage   = UserGWStorage(num_ugw_shards)
@@ -371,9 +335,9 @@ class Simulation:
 
     # -- helpers --------------------------------------------------
 
-    def _next_socket(self, user_id: str, flaky: bool) -> Socket:
+    def _next_socket(self, user_id: str) -> Socket:
         self._socket_ctr += 1
-        return Socket(f"sock{self._socket_ctr}", user_id, flaky=flaky)
+        return Socket(f"sock{self._socket_ctr}", user_id)
 
     # -- setup ----------------------------------------------------
 
@@ -386,13 +350,12 @@ class Simulation:
             chat_id  = f"chat{chat_idx + 1}"
             user_ids: List[str] = []
 
-            for u_idx in range(self.users_per_chat):
+            for _ in range(self.users_per_chat):
                 user_id  = f"u{user_counter}"
                 gw_id    = gw_ids[(user_counter - 1) % self.num_gw_nodes]
-                is_flaky = (u_idx == 0)   # first user in each chat has a flaky socket
                 user_counter += 1
 
-                socket = self._next_socket(user_id, is_flaky)
+                socket = self._next_socket(user_id)
                 user   = User(user_id)
                 user.attach(socket, gw_id)
 
@@ -427,11 +390,6 @@ class Simulation:
                 for cid, uids in gw.chat_users.items():
                     print(f"         chat_users[{cid}]={uids}")
 
-            print("\nFlaky sockets (fail first attempt, succeed on retry):")
-            for uid, user in self.users.items():
-                if user.socket and user.socket.flaky:
-                    print(f"  {user.socket.socket_id} -> {uid}")
-
     # -- run ------------------------------------------------------
 
     def run_simulation(self) -> None:
@@ -439,11 +397,12 @@ class Simulation:
 
         header("SIMULATION — SENDING MESSAGES")
 
-        # Deterministic: 2 messages per chat (from user[0] and user[1])
+        # Deterministic: MESSAGES_PER_CHAT messages per chat, each from a different user
         messages = []
         for chat_id, user_ids in self.chats.items():
-            messages.append((chat_id, "Hello everyone!", user_ids[0]))
-            messages.append((chat_id, "How are you?",    user_ids[1]))
+            for m_idx in range(self.messages_per_chat):
+                sender = user_ids[m_idx % len(user_ids)]
+                messages.append((chat_id, f"Message {m_idx + 1}", sender))
 
         for i, (chat_id, msg, sender) in enumerate(messages, 1):
             if DETAILED_OUTPUT:
@@ -476,7 +435,7 @@ class Simulation:
         for gw_id, gw in self.gw_nodes.items():
             print(
                 f"  {gw_id}: received={gw.messages_received}, "
-                f"delivered={gw.messages_delivered}, retries={gw.retry_count}"
+                f"delivered={gw.messages_delivered}"
             )
 
         # 3. Queries per user-gw storage shard
@@ -501,35 +460,53 @@ class Simulation:
                 if not user.socket:
                     continue
                 s = user.socket
-                flaky = " [flaky]" if s.flaky else ""
-                print(
-                    f"    {uid} ({user.gw_id}){flaky}: "
-                    f"delivered={s.successful_deliveries}, failed_attempts={s.failed_attempts}"
-                )
+                print(f"    {uid} ({user.gw_id}): delivered={s.successful_deliveries}")
 
     def _print_stats_summary(self) -> None:
-        print(f"\n{'=' * 50}")
+        w = 50
+        print(f"\n{'=' * w}")
         print("  SIMULATION SUMMARY")
-        print(f"{'=' * 50}")
+        print(f"{'=' * w}")
 
-        # GW node message counts
-        gw_received = [gw.messages_received for gw in self.gw_nodes.values()]
+        # --- Configuration ---
+        total_users   = self.num_chats * self.users_per_chat
+        total_msgs    = self.num_chats * self.messages_per_chat
+        print("\n[Configuration]")
+        print(f"  chats                 : {self.num_chats}")
+        print(f"  participants/chat     : {self.users_per_chat:,}")
+        print(f"  messages/chat         : {self.messages_per_chat}")
+        print(f"  total users           : {total_users:,}")
+        print(f"  total messages        : {total_msgs:,}")
+        print(f"  GW nodes (total)      : {self.num_gw_nodes}")
+        print(f"  UserGW storage shards : {self.user_gw_storage.num_shards}")
+
+        # --- GW node load ---
+        gw_received  = [gw.messages_received  for gw in self.gw_nodes.values()]
+        gw_delivered = [gw.messages_delivered for gw in self.gw_nodes.values()]
+        gw_conns     = [gw.total_connections   for gw in self.gw_nodes.values()]
         print("\n[GW nodes — messages received]")
-        print(f"  p50={_percentile(gw_received, 50):.1f}  p99={_percentile(gw_received, 99):.1f}")
+        print(f"  total={sum(gw_received):,}  p50={_percentile(gw_received, 50):.1f}  p95={_percentile(gw_received, 95):.1f}  p99={_percentile(gw_received, 99):.1f}  max={max(gw_received)}")
+        print("\n[GW nodes — messages delivered]")
+        print(f"  total={sum(gw_delivered):,}  p50={_percentile(gw_delivered, 50):.1f}  p95={_percentile(gw_delivered, 95):.1f}  p99={_percentile(gw_delivered, 99):.1f}  max={max(gw_delivered)}")
 
-        # Messages emitted per chat (same for all chats by design)
-        msgs_per_chat = [api.messages_received for api in self.chat_apis.values()]
-        print("\n[Messages emitted per chat]")
-        print(f"  {msgs_per_chat[0]} per chat  (all chats: {msgs_per_chat})")
+        # --- Storage query load ---
+        ugw_shards = self.user_gw_storage._shard_query_counts
+        print("\n[UserGW storage — queries per shard]")
+        print(f"  total={self.user_gw_storage.query_count:,}  p50={_percentile(ugw_shards, 50):.1f}  p99={_percentile(ugw_shards, 99):.1f}  max={max(ugw_shards)}")
 
-        # Per-user successful deliveries across all chats
+        # --- Users per GW node ---
+        print("\n[Users per GW node]")
+        print(f"  per chat              : {self.users_per_chat / self.num_gw_nodes:.1f}")
+        print(f"  total                 : {total_users / self.num_gw_nodes:.1f}")
+
+        # --- Per-user delivery stats ---
         user_deliveries = [
             user.socket.successful_deliveries
             for user in self.users.values()
             if user.socket
         ]
-        print("\n[Per-user deliveries (across all chats)]")
-        print(f"  p50={_percentile(user_deliveries, 50):.1f}  p99={_percentile(user_deliveries, 99):.1f}")
+        print("\n[Per-user deliveries]")
+        print(f"  p50={_percentile(user_deliveries, 50):.1f}  p95={_percentile(user_deliveries, 95):.1f}  p99={_percentile(user_deliveries, 99):.1f}  max={max(user_deliveries)}")
 
 
 # ----------------------------------------------------------------
@@ -538,8 +515,9 @@ class Simulation:
 
 if __name__ == "__main__":
     sim = Simulation(
-        num_chats      = NUM_CHATS,
-        users_per_chat = USERS_PER_CHAT,
-        num_gw_nodes   = NUM_GATEWAY_NODES,
+        num_chats         = NUM_CHATS,
+        users_per_chat    = USERS_PER_CHAT,
+        num_gw_nodes      = NUM_GATEWAY_NODES,
+        messages_per_chat = MESSAGES_PER_CHAT,
     )
     sim.run_simulation()

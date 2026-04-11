@@ -8,15 +8,17 @@ namespace Gateway.Services;
 
 /// <summary>
 /// Maintains in-memory state for all WebSocket connections:
-///   _userSockets  : userId -> WebSocket
-///   _chatUsers    : chatId -> set of userIds (using ConcurrentDictionary as a set)
-///   _sendLocks    : userId -> SemaphoreSlim  (one in-flight send per socket)
+///   _userSockets      : userId -> WebSocket
+///   _chatUsers        : chatId -> set of userIds (using ConcurrentDictionary as a set)
+///   _sendLocks        : userId -> SemaphoreSlim  (one in-flight send per socket)
+///   _chatMessageCounts: chatId -> number of messages delivered to that chat
 /// </summary>
 public class ChatRoomService
 {
     private readonly ConcurrentDictionary<string, WebSocket>          _userSockets = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim>      _sendLocks   = new();
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _chatUsers = new();
+    private readonly ConcurrentDictionary<string, long>               _chatMessageCounts = new();
 
     // ----------------------------------------------------------------
     // Connection lifecycle
@@ -77,6 +79,46 @@ public class ChatRoomService
 
         // Fan-out to all users in this chat concurrently.
         await Task.WhenAll(userIds.Keys.Select(uid => SendToUserAsync(uid, bytes)));
+
+        _chatMessageCounts.AddOrUpdate(chatId, 1, (_, prev) => prev + 1);
+    }
+
+    // ----------------------------------------------------------------
+    // Stats
+    // ----------------------------------------------------------------
+
+    public void ResetMessageStats() => _chatMessageCounts.Clear();
+
+    public ChatStats GetChatStats()
+    {
+        var userCounts    = _chatUsers.Values.Select(u => (double)u.Count).OrderBy(x => x).ToList();
+        var messageCounts = _chatMessageCounts.Values.Select(v => (double)v).OrderBy(x => x).ToList();
+
+        long totalMessages = _chatMessageCounts.Values.Sum();
+
+        return new ChatStats(
+            TotalChats:            _chatUsers.Count,
+            UsersPerChat:          ToDistribution(userCounts),
+            TotalMessagesProcessed: totalMessages,
+            MessagesPerChat:       ToDistribution(messageCounts)
+        );
+    }
+
+    private static DistributionStats ToDistribution(List<double> sorted)
+    {
+        if (sorted.Count == 0) return new DistributionStats(0, 0);
+        return new DistributionStats(
+            P50: Percentile(sorted, 50),
+            P99: Percentile(sorted, 99)
+        );
+    }
+
+    private static double Percentile(List<double> sorted, double p)
+    {
+        double idx = p / 100.0 * (sorted.Count - 1);
+        int lo = (int)idx;
+        int hi = Math.Min(lo + 1, sorted.Count - 1);
+        return sorted[lo] + (idx - lo) * (sorted[hi] - sorted[lo]);
     }
 
     // ----------------------------------------------------------------

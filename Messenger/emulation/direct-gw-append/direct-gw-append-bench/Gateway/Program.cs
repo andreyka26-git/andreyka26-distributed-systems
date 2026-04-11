@@ -55,8 +55,22 @@ app.MapPost("/chat/{chatId}/message", async (
 });
 
 // ----------------------------------------------------------------
-// GET /stats   — internal GW delivery latency (POST receipt -> all sends done)
+// GET /stats   — delivery latency + chat/user/message distribution
 // ----------------------------------------------------------------
-app.MapGet("/stats", (StatsService stats) => Results.Ok(stats.GetStats()));
+app.MapGet("/stats", (StatsService stats, ChatRoomService rooms) =>
+    Results.Ok(new StatsResponse(
+        DeliveryLatency: stats.GetLatencyStats(),
+        Chat:            rooms.GetChatStats()
+    )));
+
+// ----------------------------------------------------------------
+// POST /stats/reset   — clear all accumulated stats
+// ----------------------------------------------------------------
+app.MapPost("/stats/reset", (StatsService stats, ChatRoomService rooms) =>
+{
+    stats.Reset();
+    rooms.ResetMessageStats();
+    return Results.Ok(new { reset = true });
+});
 
 app.Run();
