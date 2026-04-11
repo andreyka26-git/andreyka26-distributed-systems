@@ -222,12 +222,11 @@ class GatewayNode:
         )
         self.messages_received += 1
 
-        # ① Resolve local users for this chat from in-memory state
+        # Resolve local users for this chat from in-memory state
         users_here = self.chat_users.get(chat_id, [])
         log(f"GW {self.gw_id}", f"in-memory chat_users[{chat_id}] = {users_here}", level=2)
 
         for user_id in users_here:
-            # ② Resolve socket from in-memory state
             socket = self.user_socket.get(user_id)
             if socket is None:
                 log(f"GW {self.gw_id}", f"WARNING: no socket found for {user_id}", level=2)
@@ -235,9 +234,17 @@ class GatewayNode:
 
             log(f"GW {self.gw_id}", f"Resolving socket for {user_id} -> {socket.socket_id}", level=2)
 
-            # ③ Deliver
-            socket.deliver(message, chat_id)
-            self.messages_delivered += 1
+            # ③ Deliver with up to 3 retries
+            max_retries = 3
+            for attempt in range(1, max_retries + 1):
+                try:
+                    socket.deliver(message, chat_id)
+                    self.messages_delivered += 1
+                    break
+                except Exception as e:
+                    log(f"GW {self.gw_id}", f"Delivery attempt {attempt}/{max_retries} failed for {user_id}: {e}", level=2)
+                    if attempt == max_retries:
+                        log(f"GW {self.gw_id}", f"ERROR: all {max_retries} delivery attempts failed for {user_id}", level=2)
 
 
 # ----------------------------------------------------------------
