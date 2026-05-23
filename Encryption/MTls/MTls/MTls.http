@@ -1,0 +1,6 @@
+@MTls_HostAddress = http://localhost:5175
+
+GET {{MTls_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
