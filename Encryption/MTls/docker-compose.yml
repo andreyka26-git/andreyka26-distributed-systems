@@ -1,0 +1,60 @@
+services:
+  rootca:
+    build:
+      context: .
+      dockerfile: RootCa/Dockerfile
+    container_name: mtls-rootca
+    environment:
+      ROOT_CA_STORAGE_PATH: /data
+      ROOT_CA_PORT: "5000"
+    volumes:
+      # Persist the root CA PFX (with its private key) on the host across restarts.
+      # Inspect with:  docker compose exec rootca ls -la /data
+      # Copy out with: docker cp mtls-rootca:/data/root-ca.pfx ./root-ca.pfx
+      - rootca-data:/data
+    ports:
+      # Exposed on the host only for convenience (curl http://localhost:5000/root-public-cert).
+      # Client1/Client2 reach the CA via the internal compose network, not this port.
+      - "5000:5000"
+    networks:
+      - mtls-net
+
+  client2:
+    build:
+      context: .
+      dockerfile: Client2/Dockerfile
+    container_name: mtls-client2
+    environment:
+      # Service-name DNS — `rootca` resolves to the rootca container inside mtls-net.
+      CA_URL: http://rootca:5000
+      SERVICE_CN: client2
+      ALLOWED_CALLER_CN: client1
+      LISTEN_PORT: "5002"
+    ports:
+      - "5002:5002"
+    networks:
+      - mtls-net
+
+  client1:
+    build:
+      context: .
+      dockerfile: Client1/Dockerfile
+    container_name: mtls-client1
+    environment:
+      CA_URL: http://rootca:5000
+      # `client2` resolves to the client2 container; the CA-issued leaf cert for
+      # client2 now contains DNS SAN "client2" so hostname verification passes.
+      PEER_URL: https://client2:5002
+      SERVICE_CN: client1
+      LISTEN_PORT: "5001"
+    ports:
+      - "5001:5001"
+    networks:
+      - mtls-net
+
+volumes:
+  rootca-data:
+
+networks:
+  mtls-net:
+    driver: bridge

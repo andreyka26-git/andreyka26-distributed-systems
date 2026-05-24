@@ -4,21 +4,8 @@ using System.Text;
 
 namespace Common;
 
-public class CertsService 
+public class CertService
 {
-    public X509Certificate2 GenerateRootCaCert()
-    {
-        // key pair
-        var ecdsa = ECDsa.Create();
-        
-        Console.WriteLine(ecdsa.ExportPkcs8PrivateKeyPem());
-
-        var request = new CertificateRequest("CN=AndriiCARoot", ecdsa, HashAlgorithmName.SHA256);
-        var cert = request.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(10));
-            
-        return cert;
-    }
-
     public byte[] SignWithPrivate(string textCorpus, X509Certificate2 cert)
     {
         var privateKey = cert.GetECDsaPrivateKey();
@@ -32,7 +19,7 @@ public class CertsService
     {
         var publicKey = cert.GetECDsaPublicKey();
         var data = Encoding.UTF8.GetBytes(textCorpus);
-        
+
         return publicKey.VerifyData(data, signature, HashAlgorithmName.SHA256);
     }
 }
