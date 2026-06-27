@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: demo
+    # Host port 5433 so it never clashes with a local Postgres on 5432.
+    # Connect pgAdmin to:  host=localhost  port=5433  db=demo  user=postgres  pass=postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      # Auto-creates & seeds the `seats` table on first boot (good for pgAdmin too).
+      - ./sql/00_setup.sql:/docker-entrypoint-initdb.d/00_setup.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d demo"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PG_HOST: postgres
+      PG_PORT: "5432"
+      PG_DB: demo
+      PG_USER: postgres
+      PG_PASSWORD: postgres

@@ -1,0 +1,29 @@
+services:
+  mongo:
+    image: mongo:7
+    # A single-node REPLICA SET is required for MongoDB multi-document
+    # transactions (used by the pessimistic/WriteConflict demo).
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27018:27017"   # host 27018 -> connect mongosh/Compass here
+    healthcheck:
+      # Initiate the replica set once, pinning the member host to "mongo:27017"
+      # so clients using ?replicaSet=rs0 can find the primary.
+      test: >
+        mongosh --quiet --eval '
+          try { rs.status().ok }
+          catch (e) {
+            rs.initiate({_id:"rs0", members:[{_id:0, host:"mongo:27017"}]})
+          }'
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 5s
+
+  app:
+    build: .
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      MONGO_URI: "mongodb://mongo:27017/?replicaSet=rs0"

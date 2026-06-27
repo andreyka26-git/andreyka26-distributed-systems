@@ -1,0 +1,17 @@
+services:
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
+    ports:
+      - "8000:8000"
+
+  app:
+    build: .
+    depends_on:
+      - dynamodb
+    environment:
+      DDB_ENDPOINT: "http://dynamodb:8000"
+      AWS_REGION: "us-east-1"
+      # DynamoDB Local ignores these but boto3 requires *something*.
+      AWS_ACCESS_KEY_ID: "fake"
+      AWS_SECRET_ACCESS_KEY: "fake"
