@@ -1,0 +1,65 @@
+# Runs in PARALLEL with ../postgres (port 5433, db 'demo') and the other folders:
+# the compose project defaults to this folder name (dotnet-production-example), which namespaces
+# networks/volumes; container names + host ports below are unique too.
+services:
+  postgres:
+    image: postgres:16
+    container_name: concurrency-pg-dotnet     # globally-unique container name
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: seats
+    # Host port 5434 -> avoids 5432 (local PG) and 5433 (../postgres demo).
+    # Connect pgAdmin to: host=localhost port=5434 db=seats user=postgres pass=postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      # Auto-creates & seeds the `seats` table on first boot.
+      - ./sql/00_setup.sql:/docker-entrypoint-initdb.d/00_setup.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d seats"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7
+    container_name: concurrency-redis-dotnet
+    # Host port 6380 -> avoids a local Redis on the default 6379.
+    # Connect with: redis-cli -p 6380
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  mongo:
+    image: mongo:7
+    container_name: concurrency-mongo-dotnet
+    # Host port 27018 -> avoids a local Mongo on the default 27017.
+    # Connect with: mongosh --port 27018
+    ports:
+      - "27018:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    container_name: concurrency-app-dotnet
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    environment:
+      # In-network connections (service names, internal default ports).
+      POSTGRES_CONNECTION: "Host=postgres;Port=5432;Database=seats;Username=postgres;Password=postgres"
+      REDIS_CONNECTION: "redis:6379"
+      MONGO_CONNECTION: "mongodb://mongo:27017"

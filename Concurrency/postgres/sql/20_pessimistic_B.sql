@@ -1,23 +1,32 @@
 -- =====================================================================
 --  SCENARIO 2: PESSIMISTIC  (SELECT ... FOR UPDATE)   --  THE FIX
 --  This is SESSION B.
+--  Works in pgAdmin (pure SQL, no psql meta-commands).
 -- =====================================================================
 
--- STEP 3 (B):
 BEGIN;
 
--- STEP 3 (B, cont.): try to lock the same row.
---   ▶ THIS WILL HANG until SESSION A commits (its STEP 5). Watch the spinner.
+-- This SELECT ... FOR UPDATE BLOCKS until session A commits, because A
+-- holds the row lock. Once A commits, we read the *fresh* row (reserved).
 SELECT id, status FROM seats WHERE id = 1 FOR UPDATE;
---   After A commits, this UNBLOCKS and returns the FRESH row:
---   -> status = 'reserved', because A took it while we waited.
 
--- STEP 6 (B): our app logic checks the status it just read.
---   status is 'reserved' (not 'available') -> we must NOT take the seat.
---   (We simply don't UPDATE.) Roll back; the seat stays ALICE's.
-ROLLBACK;
+-- The decision the application code would make on the locked row.
+-- (See the Messages tab in pgAdmin for the RAISE NOTICE output.)
+DO $$
+DECLARE
+    seat_status text;
+BEGIN
+    SELECT status INTO seat_status FROM seats WHERE id = 1 FOR UPDATE;
+
+    IF seat_status = 'available' THEN
+        UPDATE seats SET status = 'reserved', reserved_by = 'BOB' WHERE id = 1;
+        RAISE NOTICE '>> Seat was free -- reserved by BOB.';
+    ELSE
+        RAISE NOTICE '>> Seat already reserved -- application rejects, no change.';
+    END IF;
+END $$;
+
+-- COMMIT is safe either way: on the reject path nothing was updated.
+COMMIT;
 
 SELECT id, status, reserved_by FROM seats WHERE id = 1;
---   -> reserved_by = 'ALICE'. Exactly one winner.
---   WHY IT WORKS: FOR UPDATE serialized access — B literally could not look at
---   the row until A finished, so B saw the committed truth and backed off.
