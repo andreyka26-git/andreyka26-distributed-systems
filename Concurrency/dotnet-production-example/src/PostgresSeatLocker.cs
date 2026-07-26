@@ -9,10 +9,18 @@ namespace SeatLocking;
 /// different isolation and locking choices:
 /// <list type="bullet">
 ///   <item><see cref="LockSeatPessimisticAsync"/> — row lock up front (<c>SELECT ... FOR UPDATE</c>). Safe.</item>
-///   <item><see cref="LockSeatOptimisticAsync"/> — no lock; a versioned compare-and-swap with retry. Safe.</item>
+///   <item><see cref="LockSeatOptimisticAsync"/> — no lock; a status compare-and-swap. Safe.</item>
 ///   <item><see cref="LockSeatRepeatableReadAsync"/> — unconditional write, but snapshot isolation aborts the loser. Safe.</item>
 ///   <item><see cref="LockSeatDirtyWriteAsync"/> — naive read-modify-write. LOST UPDATE (do not ship).</item>
 /// </list>
+///
+/// Every method here opens an explicit transaction, including the read-only ones. That is deliberate:
+/// the point of the demo is to reason about isolation levels, and an isolation level only means
+/// something relative to a transaction boundary you can see in the code.
+///
+/// None of the strategies retry. Losing the race is not a transient failure to paper over — it is the
+/// answer: the seat is reserved by someone else, and reserving is one-way, so a second attempt can only
+/// ever re-read the same 'reserved' row. The loser reads the winner once and returns AlreadyTaken.
 /// </summary>
 public sealed class PostgresSeatLocker : ISeatLocker
 {
@@ -35,15 +43,15 @@ public sealed class PostgresSeatLocker : ISeatLocker
             ExpectedSafe: true,
             (seatId, customer, ct) => LockSeatPessimisticAsync(seatId, customer, ct)),
         new SeatLockStrategy(
-            "Postgres OPTIMISTIC (version compare-and-swap, retry)",
+            "Postgres OPTIMISTIC (status compare-and-swap)",
             "the loser's `WHERE status = @status` matches 0 rows; it re-reads, sees 'reserved', backs off",
             ExpectedSafe: true,
-            (seatId, customer, ct) => LockSeatOptimisticAsync(seatId, customer, ct: ct)),
+            LockSeatOptimisticAsync),
         new SeatLockStrategy(
             "Postgres REPEATABLE READ (unconditional write, snapshot isolation)",
-            "same naive write, but the loser is aborted with 40001 and retries into 'reserved'",
+            "same naive write, but the loser is aborted with 40001 and re-reads into 'reserved'",
             ExpectedSafe: true,
-            (seatId, customer, ct) => LockSeatRepeatableReadAsync(seatId, customer, ct: ct)),
+            LockSeatRepeatableReadAsync),
     };
 
     private async Task<NpgsqlConnection> OpenAsync(CancellationToken ct)
@@ -92,41 +100,61 @@ public sealed class PostgresSeatLocker : ISeatLocker
     /// <summary>
     /// OPTIMISTIC lock_seat: no locks. Read the current status, then write conditionally with
     /// <c>WHERE id = @id AND status = @status</c>. If the status moved under us the UPDATE touches
-    /// 0 rows; we re-read and retry. Best when conflicts are rare — callers never wait on a lock.
+    /// 0 rows and we lost the race. Best when conflicts are rare — callers never wait on a lock.
+    ///
+    /// The whole flow runs in one explicit transaction at READ COMMITTED (Postgres' default). Note what
+    /// READ COMMITTED buys us on the loser path: each statement takes a FRESH snapshot, so the re-read
+    /// after a 0-row UPDATE — still inside our own transaction — does see the winner's committed row.
+    /// (Under REPEATABLE READ that same re-read would return our frozen snapshot's 'available' and tell
+    /// us nothing, which is exactly why <see cref="LockSeatRepeatableReadAsync"/> has to open a second
+    /// transaction to find the winner.)
+    ///
+    /// No retry: a 0-row UPDATE means somebody committed 'reserved', and available -> reserved is
+    /// one-way, so re-attempting could only re-read the same holder. We read it once and back off.
     /// </summary>
     public async Task<SeatLockResult> LockSeatOptimisticAsync(
-        int seatId, string customer, int maxAttempts = 3, CancellationToken ct = default)
+        int seatId, string customer, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct); // READ COMMITTED
 
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        var seat = await conn.QuerySingleOrDefaultAsync<SeatRow>(new CommandDefinition(
+            "SELECT id, status, reserved_by, version FROM seats WHERE id = @seatId",
+            new { seatId }, tx, cancellationToken: ct));
+
+        if (seat is null)
+            throw new InvalidOperationException($"Seat {seatId} does not exist.");
+
+        if (seat.Status != "available")
         {
-            var seat = await conn.QuerySingleOrDefaultAsync<SeatRow>(new CommandDefinition(
-                "SELECT id, status, reserved_by, version FROM seats WHERE id = @seatId",
-                new { seatId }, cancellationToken: ct));
-
-            if (seat is null)
-                throw new InvalidOperationException($"Seat {seatId} does not exist.");
-
-            if (seat.Status != "available")
-                return new SeatLockResult(SeatLockOutcome.AlreadyTaken, seat.ReservedBy, seat.Version);
-
-            // Compare-and-swap: only succeeds if the status is still what we read.
-            var rows = await conn.ExecuteAsync(new CommandDefinition(
-                """
-                UPDATE seats
-                   SET status = 'reserved', reserved_by = @customer, version = version + 1
-                 WHERE id = @seatId AND status = @status
-                """,
-                new { customer, seatId, seat.Status }, cancellationToken: ct));
-
-            if (rows == 1)
-                return new SeatLockResult(SeatLockOutcome.Reserved, customer, seat.Version + 1);
-
-            // rows == 0 -> someone else bumped the version; loop, re-read, try again.
+            await tx.RollbackAsync(ct);
+            return new SeatLockResult(SeatLockOutcome.AlreadyTaken, seat.ReservedBy, seat.Version);
         }
 
-        return new SeatLockResult(SeatLockOutcome.Conflict, null, -1);
+        // Compare-and-swap: only succeeds if the status is still what we read.
+        var rows = await conn.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE seats
+               SET status = 'reserved', reserved_by = @customer, version = version + 1
+             WHERE id = @seatId AND status = @status
+            """,
+            new { customer, seatId, seat.Status }, tx, cancellationToken: ct));
+
+        if (rows == 1)
+        {
+            await tx.CommitAsync(ct);
+            return new SeatLockResult(SeatLockOutcome.Reserved, customer, seat.Version + 1);
+        }
+
+        // rows == 0 -> the winner committed between our SELECT and our UPDATE. Re-read (new statement,
+        // new snapshot) to report who holds the seat, then roll back — we wrote nothing.
+        var winner = await conn.QuerySingleOrDefaultAsync<SeatRow>(new CommandDefinition(
+            "SELECT id, status, reserved_by, version FROM seats WHERE id = @seatId",
+            new { seatId }, tx, cancellationToken: ct));
+
+        await tx.RollbackAsync(ct);
+        return new SeatLockResult(
+            SeatLockOutcome.AlreadyTaken, winner?.ReservedBy, winner?.Version ?? seat.Version + 1);
     }
 
     /// <summary>
@@ -210,62 +238,76 @@ public sealed class PostgresSeatLocker : ISeatLocker
     ///   B: -> ERROR 40001 "could not serialize access due to concurrent update"
     /// </code>
     /// B's UPDATE cannot silently overwrite a row that changed after B's snapshot, so Postgres aborts
-    /// B with SQLSTATE <c>40001</c> (serialization_failure). We catch it and retry: on the next
-    /// attempt B gets a fresh snapshot, reads 'reserved', and backs off cleanly as
-    /// <see cref="SeatLockOutcome.AlreadyTaken"/>. The database enforces correctness; the app just
-    /// has to be willing to retry the aborted transaction. Contrast <see cref="LockSeatOptimisticAsync"/>,
-    /// which gets the same safety at READ COMMITTED by making the guard explicit in the WHERE clause.
+    /// B with SQLSTATE <c>40001</c> (serialization_failure). The database enforces correctness; the app
+    /// only has to interpret the abort. Contrast <see cref="LockSeatOptimisticAsync"/>, which gets the
+    /// same safety at READ COMMITTED by making the guard explicit in the WHERE clause.
+    ///
+    /// No retry: 40001 here is not a transient glitch, it is the verdict — someone committed 'reserved'
+    /// ahead of us. Reserving is one-way, so a retried transaction could only read back the same holder.
+    /// We report it instead. Finding out who won does need a SECOND transaction: our first one is
+    /// aborted (every further statement in it fails with 25P02 until rollback), and even if it weren't,
+    /// REPEATABLE READ would keep serving the frozen snapshot where the seat still reads 'available'.
     /// </summary>
     public async Task<SeatLockResult> LockSeatRepeatableReadAsync(
-        int seatId, string customer, int maxAttempts = 3, CancellationToken ct = default)
+        int seatId, string customer, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(
+            System.Data.IsolationLevel.RepeatableRead, ct);
 
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        try
         {
-            await using var tx = await conn.BeginTransactionAsync(
+            var seat = await conn.QuerySingleOrDefaultAsync<SeatRow>(new CommandDefinition(
+                "SELECT id, status, reserved_by, version FROM seats WHERE id = @seatId",
+                new { seatId }, tx, cancellationToken: ct));
+
+            if (seat is null)
+                throw new InvalidOperationException($"Seat {seatId} does not exist.");
+
+            if (seat.Status != "available")
+            {
+                await tx.RollbackAsync(ct);
+                return new SeatLockResult(SeatLockOutcome.AlreadyTaken, seat.ReservedBy, seat.Version);
+            }
+
+            // Unconditional write — no status guard. Under REPEATABLE READ this is still safe:
+            // if a concurrent txn committed a change to this row after our snapshot, the UPDATE
+            // fails with 40001 instead of clobbering it.
+            await conn.ExecuteAsync(new CommandDefinition(
+                "UPDATE seats SET status = 'reserved', reserved_by = @customer, version = version + 1 WHERE id = @seatId",
+                new { customer, seatId }, tx, cancellationToken: ct));
+
+            await tx.CommitAsync(ct);
+            return new SeatLockResult(SeatLockOutcome.Reserved, customer, seat.Version + 1);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.SerializationFailure)
+        {
+            // We lost the race: another transaction committed first. Roll back the aborted transaction,
+            // then read the winner on a fresh snapshot in a transaction of its own.
+            await tx.RollbackAsync(ct);
+
+            await using var readTx = await conn.BeginTransactionAsync(
                 System.Data.IsolationLevel.RepeatableRead, ct);
 
-            try
-            {
-                var seat = await conn.QuerySingleOrDefaultAsync<SeatRow>(new CommandDefinition(
-                    "SELECT id, status, reserved_by, version FROM seats WHERE id = @seatId",
-                    new { seatId }, tx, cancellationToken: ct));
+            var winner = await conn.QuerySingleOrDefaultAsync<SeatRow>(new CommandDefinition(
+                "SELECT id, status, reserved_by, version FROM seats WHERE id = @seatId",
+                new { seatId }, readTx, cancellationToken: ct));
 
-                if (seat is null)
-                    throw new InvalidOperationException($"Seat {seatId} does not exist.");
-
-                if (seat.Status != "available")
-                {
-                    await tx.RollbackAsync(ct);
-                    return new SeatLockResult(SeatLockOutcome.AlreadyTaken, seat.ReservedBy, seat.Version);
-                }
-
-                // Unconditional write — no status guard. Under REPEATABLE READ this is still safe:
-                // if a concurrent txn committed a change to this row after our snapshot, the COMMIT/
-                // UPDATE fails with 40001 instead of clobbering it.
-                await conn.ExecuteAsync(new CommandDefinition(
-                    "UPDATE seats SET status = 'reserved', reserved_by = @customer, version = version + 1 WHERE id = @seatId",
-                    new { customer, seatId }, tx, cancellationToken: ct));
-
-                await tx.CommitAsync(ct);
-                return new SeatLockResult(SeatLockOutcome.Reserved, customer, seat.Version + 1);
-            }
-            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.SerializationFailure)
-            {
-                // We lost the race: another transaction committed first. Roll back and retry on a
-                // fresh snapshot — where we'll read 'reserved' and back off as AlreadyTaken.
-                await tx.RollbackAsync(ct);
-            }
+            await readTx.CommitAsync(ct);
+            return new SeatLockResult(SeatLockOutcome.AlreadyTaken, winner?.ReservedBy, winner?.Version ?? -1);
         }
-
-        return new SeatLockResult(SeatLockOutcome.Conflict, null, -1);
     }
 
-    /// <summary>Reset seat back to a clean 'available' state (used between demo runs).</summary>
+    /// <summary>
+    /// Reset seat back to a clean 'available' state (used between demo runs). Postgres would run this
+    /// single statement in its own implicit transaction anyway; it is spelled out here so that every
+    /// method in this class shows its transaction boundary.
+    /// </summary>
     public async Task ResetSeatAsync(int seatId, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
         await conn.ExecuteAsync(new CommandDefinition(
             """
             INSERT INTO seats (id, status, reserved_by, version)
@@ -273,16 +315,26 @@ public sealed class PostgresSeatLocker : ISeatLocker
             ON CONFLICT (id) DO UPDATE
                 SET status = 'available', reserved_by = NULL, version = 0
             """,
-            new { seatId }, cancellationToken: ct));
+            new { seatId }, tx, cancellationToken: ct));
+
+        await tx.CommitAsync(ct);
     }
 
-    /// <summary>Read the current seat row (for reporting).</summary>
+    /// <summary>
+    /// Read the current seat row (for reporting). The transaction is explicit for consistency with the
+    /// rest of the class — it is a normal READ COMMITTED transaction that happens to only read, not a
+    /// declared <c>READ ONLY</c> one.
+    /// </summary>
     public async Task<SeatSnapshot?> GetSeatAsync(int seatId, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
         var row = await conn.QuerySingleOrDefaultAsync<SeatRow>(new CommandDefinition(
             "SELECT id, status, reserved_by, version FROM seats WHERE id = @seatId",
-            new { seatId }, cancellationToken: ct));
+            new { seatId }, tx, cancellationToken: ct));
+
+        await tx.CommitAsync(ct);
         return row is null ? null : new SeatSnapshot(row.Status, row.ReservedBy, row.Version);
     }
 }

@@ -9,7 +9,11 @@ public enum SeatLockOutcome
     /// <summary>Someone else already holds the seat. The caller backed off cleanly.</summary>
     AlreadyTaken,
 
-    /// <summary>Optimistic only: kept losing the compare-and-swap until attempts ran out.</summary>
+    /// <summary>
+    /// The write neither landed nor identified a holder. No strategy retries — losing a race yields
+    /// <see cref="AlreadyTaken"/> — so this is left for the "defensive" row-count guard in
+    /// <c>LockSeatDirtyWriteAsync</c>, which exists to show that such a guard never actually fires.
+    /// </summary>
     Conflict
 }
 

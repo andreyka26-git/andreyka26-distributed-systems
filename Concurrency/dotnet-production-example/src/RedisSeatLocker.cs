@@ -104,14 +104,7 @@ public sealed class RedisSeatLocker : ISeatLocker
             return {0, redis.call('GET', KEYS[1])}
         end
         """;
-
-    /// <summary>
-    /// LUA lock_seat: the whole check-and-set travels to the server as one script. This is the most
-    /// general atomic pattern — anything you can express as "read some keys, branch, write some keys"
-    /// becomes race-free without NX-style special casing, because Redis runs the entire script
-    /// atomically. Here it's equivalent to <see cref="LockSeatSetNxAsync"/>, but it scales to
-    /// multi-key / multi-step reservations that a single SET NX can't express.
-    /// </summary>
+        
     public async Task<SeatLockResult> LockSeatLuaAsync(
         int seatId, string customer, CancellationToken ct = default)
     {

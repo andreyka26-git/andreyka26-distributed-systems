@@ -22,7 +22,9 @@ namespace SeatLocking;
 /// <list type="bullet">
 ///   <item><b>Optimistic</b> (what <see cref="LockSeatAtomicAsync"/> does): don't hold anything; put the
 ///     expected state into the update's filter (<c>version = @v</c>). If the document moved under you the
-///     update matches 0 docs — you retry. This is the idiomatic Mongo approach.</item>
+///     update matches 0 docs — you lost, and you read who won. This is the idiomatic Mongo
+    ///     approach. Nothing here retries: available -> reserved is one-way, so a second attempt could only
+    ///     re-read the same holder.</item>
 ///   <item><b>Pessimistic</b>: Mongo has no <c>SELECT ... FOR UPDATE</c>. The closest single-document tool
 ///     is <c>findAndModify</c>, which reads and writes the matched document as one atomic, isolated step
 ///     (it briefly holds the document lock for the duration). Genuine multi-document "lock now, decide
@@ -50,7 +52,7 @@ public sealed class MongoSeatLocker : ISeatLocker
             "Mongo ATOMIC (conditional update guarded by version)",
             "the guard `status = 'available'` lives inside the update filter; the loser matches 0 docs and re-reads into 'reserved'",
             ExpectedSafe: true,
-            (seatId, customer, ct) => LockSeatAtomicAsync(seatId, customer, ct: ct)),
+            LockSeatAtomicAsync),
         new SeatLockStrategy(
             "Mongo ATOMIC (guard on the status we read & checked)",
             "same read-check as naive, but the write filters on `status = seat.Status` (the observed value) — a compare-and-swap; the loser matches 0 docs",
@@ -99,47 +101,47 @@ public sealed class MongoSeatLocker : ISeatLocker
     /// update whose filter carries the state we expect — <c>_id AND status='available'</c>.
     /// Mongo applies the update to a single document atomically, so only one concurrent caller can
     /// match: the other's filter no longer matches (status flipped to 'reserved'), it modifies 0 docs,
-    /// and we retry, re-read the now-'reserved' seat, and return AlreadyTaken.
+    /// re-reads the now-'reserved' seat, and returns AlreadyTaken.
     ///
     /// The whole safety argument is "put the expectation in the filter". Guarding on <c>status</c> is
     /// sufficient because this transition is one-way; no lock is held between the read and the write.
+    /// That one-wayness is also why there is no retry loop: once the CAS fails, the seat is reserved for
+    /// good, and looping would just re-read the same holder.
     /// </summary>
     public async Task<SeatLockResult> LockSeatAtomicAsync(
-        int seatId, string customer, int maxAttempts = 3, CancellationToken ct = default)
+        int seatId, string customer, CancellationToken ct = default)
     {
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            var seat = await _seats.Find(s => s.Id == seatId).FirstOrDefaultAsync(ct);
+        var seat = await _seats.Find(s => s.Id == seatId).FirstOrDefaultAsync(ct);
 
-            if (seat is null)
-                throw new InvalidOperationException($"Seat {seatId} does not exist.");
+        if (seat is null)
+            throw new InvalidOperationException($"Seat {seatId} does not exist.");
 
-            if (seat.Status != "available")
-                return new SeatLockResult(SeatLockOutcome.AlreadyTaken, seat.ReservedBy, seat.Version);
+        if (seat.Status != "available")
+            return new SeatLockResult(SeatLockOutcome.AlreadyTaken, seat.ReservedBy, seat.Version);
 
-            // Compare-and-swap: the update only lands while the seat is still 'available'. Because the
-            // transition is one-way (available -> reserved), the status guard alone is enough — the loser's
-            // filter matches 0 docs once the winner flips it. (A version guard would additionally cover the
-            // ABA case where a seat bounces reserved -> available -> reserved between our read and write,
-            // which this flow never does.)
-            var filter = Builders<SeatDoc>.Filter.And(
-                Builders<SeatDoc>.Filter.Eq(s => s.Id, seatId),
-                Builders<SeatDoc>.Filter.Eq(s => s.Status, "available"));
+        // Compare-and-swap: the update only lands while the seat is still 'available'. Because the
+        // transition is one-way (available -> reserved), the status guard alone is enough — the loser's
+        // filter matches 0 docs once the winner flips it. (A version guard would additionally cover the
+        // ABA case where a seat bounces reserved -> available -> reserved between our read and write,
+        // which this flow never does.)
+        var filter = Builders<SeatDoc>.Filter.And(
+            Builders<SeatDoc>.Filter.Eq(s => s.Id, seatId),
+            Builders<SeatDoc>.Filter.Eq(s => s.Status, "available"));
 
-            var update = Builders<SeatDoc>.Update
-                .Set(s => s.Status, "reserved")
-                .Set(s => s.ReservedBy, customer)
-                .Inc(s => s.Version, 1);
+        var update = Builders<SeatDoc>.Update
+            .Set(s => s.Status, "reserved")
+            .Set(s => s.ReservedBy, customer)
+            .Inc(s => s.Version, 1);
 
-            var result = await _seats.UpdateOneAsync(filter, update, cancellationToken: ct);
+        var result = await _seats.UpdateOneAsync(filter, update, cancellationToken: ct);
 
-            if (result.ModifiedCount == 1)
-                return new SeatLockResult(SeatLockOutcome.Reserved, customer, seat.Version + 1);
+        if (result.ModifiedCount == 1)
+            return new SeatLockResult(SeatLockOutcome.Reserved, customer, seat.Version + 1);
 
-            // ModifiedCount == 0 -> someone else won the CAS; loop, re-read, try again.
-        }
-
-        return new SeatLockResult(SeatLockOutcome.Conflict, null, -1);
+        // ModifiedCount == 0 -> someone else won the CAS. Re-read to report the winner.
+        var winner = await _seats.Find(s => s.Id == seatId).FirstOrDefaultAsync(ct);
+        return new SeatLockResult(
+            SeatLockOutcome.AlreadyTaken, winner?.ReservedBy, winner?.Version ?? seat.Version + 1);
     }
 
     /// <summary>
