@@ -59,7 +59,7 @@ def run(worker):
 
 
 # --------------------------------------------------------------------------- #
-# 1. NO LOCK — THE BUG
+# 1. NO LOCK - THE BUG
 # --------------------------------------------------------------------------- #
 def scenario_no_lock():
     header("1. NO LOCK  (read-modify-write, unguarded)  -- THE BUG")
@@ -79,10 +79,10 @@ def scenario_no_lock():
 
 
 # --------------------------------------------------------------------------- #
-# 2. PESSIMISTIC — threading.Lock
+# 2. PESSIMISTIC - threading.Lock
 # --------------------------------------------------------------------------- #
 def scenario_pessimistic():
-    header("2. PESSIMISTIC  (threading.Lock — others block)  -- FIX")
+    header("2. PESSIMISTIC  (threading.Lock - others block)  -- FIX")
     seat = {"status": "available", "reserved_by": None}
     lock = threading.Lock()
 
@@ -102,7 +102,7 @@ def scenario_pessimistic():
 
 
 # --------------------------------------------------------------------------- #
-# 3. OPTIMISTIC — version + compare-and-swap retry loop
+# 3. OPTIMISTIC - version + compare-and-swap retry loop
 # --------------------------------------------------------------------------- #
 def scenario_optimistic():
     header("3. OPTIMISTIC  (version + compare-and-swap retry)  -- FIX")
@@ -139,7 +139,7 @@ def scenario_optimistic():
 
 
 # --------------------------------------------------------------------------- #
-# 4. ATOMIC — a single indivisible claim (Queue token)
+# 4. ATOMIC - a single indivisible claim (Queue token)
 # --------------------------------------------------------------------------- #
 def scenario_atomic():
     header("4. ATOMIC  (single indivisible claim via queue.Queue)  -- FIX")
@@ -151,7 +151,7 @@ def scenario_atomic():
 
     def worker(name):
         try:
-            seat_token.get_nowait()         # atomic claim — no check-then-act gap
+            seat_token.get_nowait()         # atomic claim - no check-then-act gap
             return True
         except queue.Empty:
             return False                    # token already gone -> seat taken

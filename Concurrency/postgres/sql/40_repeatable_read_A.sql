@@ -1,7 +1,7 @@
 -- =====================================================================
 --  SCENARIO 4: REPEATABLE READ  (DB raises serialization_failure)  --  THE FIX
 --  This is SESSION A.  Run `99_reset.sql` first.
---  Here we DON'T add a version guard — we let the isolation level catch it.
+--  Here we DON'T add a version guard - we let the isolation level catch it.
 -- =====================================================================
 
 -- STEP 1 (A):

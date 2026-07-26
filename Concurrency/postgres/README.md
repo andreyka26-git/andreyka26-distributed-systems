@@ -1,4 +1,4 @@
-# PostgreSQL — optimistic vs pessimistic vs isolation levels
+# PostgreSQL - optimistic vs pessimistic vs isolation levels
 
 ## Run the automated demo
 ```bash
@@ -14,7 +14,7 @@ Expected output (abridged):
 
 ## Step through it by hand in pgAdmin
 The Postgres container stays up after the demo. Open **two query windows** and follow
-the numbered `.sql` files in [`sql/`](sql/) — you'll watch one session **block** on a lock
+the numbered `.sql` files in [`sql/`](sql/) - you'll watch one session **block** on a lock
 or **fail** with `40001`. See [`sql/README.md`](sql/README.md). Connection: `localhost:5433`, db `demo`, `postgres`/`postgres`.
 
 ## The three fixes, side by side
@@ -29,9 +29,9 @@ or **fail** with `40001`. See [`sql/README.md`](sql/README.md). Connection: `loc
 
 | Level            | Lost update via read-then-write? | Notes |
 |------------------|----------------------------------|-------|
-| `READ COMMITTED` (default) | **Yes, possible** — needs `FOR UPDATE` or a version guard | each statement sees latest committed data |
-| `REPEATABLE READ`| **No** — write conflict → `40001` | snapshot fixed at first query; cheap, but you must retry |
-| `SERIALIZABLE`   | **No** — `40001` | strongest; also catches phantom/skew cases the seat demo doesn't need |
+| `READ COMMITTED` (default) | **Yes, possible** - needs `FOR UPDATE` or a version guard | each statement sees latest committed data |
+| `REPEATABLE READ`| **No** - write conflict → `40001` | snapshot fixed at first query; cheap, but you must retry |
+| `SERIALIZABLE`   | **No** - `40001` | strongest; also catches phantom/skew cases the seat demo doesn't need |
 
 > Pessimistic = "I'll wait my turn." Optimistic = "I'll try and apologize if I lose."
 > Pick pessimistic under high contention on the same row; optimistic when conflicts are rare.

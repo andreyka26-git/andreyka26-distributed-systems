@@ -1,4 +1,4 @@
-# Concurrency & Race Condition POCs — "Reserve the seat"
+# Concurrency & Race Condition POCs - "Reserve the seat"
 
 A set of runnable demos that all solve the **same** problem in different stores:
 
@@ -20,7 +20,7 @@ using the three families of concurrency control:
 |-------------------|------------------|--------------------------------------------------------------|
 | [`postgres/`](postgres/)   | PostgreSQL       | lost update bug, **optimistic** (version), **pessimistic** (`FOR UPDATE`), isolation levels (`READ COMMITTED` / `REPEATABLE READ` / `SERIALIZABLE`). **+ raw `.sql` files for pgAdmin.** |
 | [`mongodb/`](mongodb/)     | MongoDB          | bug, **optimistic** (atomic conditional update / version), **pessimistic** (transactions → WriteConflict). |
-| [`dynamodb/`](dynamodb/)   | DynamoDB (local) | bug, **optimistic** (`ConditionExpression` + version). No native pessimistic — explained. |
+| [`dynamodb/`](dynamodb/)   | DynamoDB (local) | bug, **optimistic** (`ConditionExpression` + version). No native pessimistic - explained. |
 | [`redis/`](redis/)         | Redis            | bug, **atomic** `SET NX`, **atomic** Lua script, **optimistic** `WATCH`/`MULTI`/`EXEC`. |
 | [`inmemory/`](inmemory/)   | Plain Python     | bug, **pessimistic** (`Lock`), **optimistic** (CAS retry), **atomic** (`Queue`). |
 
@@ -43,7 +43,7 @@ Tear down with `docker compose down -v`.
 
 ## Language choice
 
-Everything is **Python** for consistency and brevity — the race-condition logic is identical
+Everything is **Python** for consistency and brevity - the race-condition logic is identical
 across stores, so only the *storage primitive* changes between folders. Read the code top-to-bottom;
 the interesting comments are right next to the SQL / commands explaining **why** each case is safe
 or broken.

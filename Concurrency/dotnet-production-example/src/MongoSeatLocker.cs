@@ -8,12 +8,12 @@ namespace SeatLocking;
 /// document in the <c>seats</c> collection: <c>{ _id, status, reserved_by, version }</c>. Two
 /// <c>lock_seat</c> strategies:
 /// <list type="bullet">
-///   <item><see cref="LockSeatNaiveAsync"/> — find, decide in app code, then update by _id. LOST UPDATE.</item>
-///   <item><see cref="LockSeatAtomicAsync"/> — a single conditional update guarded by <c>version</c>. Safe.</item>
+///   <item><see cref="LockSeatNaiveAsync"/> - find, decide in app code, then update by _id. LOST UPDATE.</item>
+///   <item><see cref="LockSeatAtomicAsync"/> - a single conditional update guarded by <c>version</c>. Safe.</item>
 /// </list>
 ///
 /// The key fact about Mongo's concurrency model: a write to a <b>single document</b> is atomic and
-/// isolated — no other operation sees a half-applied update, and two updates to the same document are
+/// isolated - no other operation sees a half-applied update, and two updates to the same document are
 /// serialized by the storage engine (WiredTiger) with document-level locking. But that atomicity only
 /// covers each individual command. It does NOT stretch across a separate read followed by a separate
 /// write, which is exactly the gap the naive method falls into.
@@ -22,7 +22,7 @@ namespace SeatLocking;
 /// <list type="bullet">
 ///   <item><b>Optimistic</b> (what <see cref="LockSeatAtomicAsync"/> does): don't hold anything; put the
 ///     expected state into the update's filter (<c>version = @v</c>). If the document moved under you the
-///     update matches 0 docs — you lost, and you read who won. This is the idiomatic Mongo
+///     update matches 0 docs - you lost, and you read who won. This is the idiomatic Mongo
     ///     approach. Nothing here retries: available -> reserved is one-way, so a second attempt could only
     ///     re-read the same holder.</item>
 ///   <item><b>Pessimistic</b>: Mongo has no <c>SELECT ... FOR UPDATE</c>. The closest single-document tool
@@ -45,7 +45,7 @@ public sealed class MongoSeatLocker : ISeatLocker
     {
         new SeatLockStrategy(
             "Mongo NAIVE (find, check, update by _id)",
-            "both callers read 'available', both update by _id — single-doc atomicity can't span the two ops, last write wins",
+            "both callers read 'available', both update by _id - single-doc atomicity can't span the two ops, last write wins",
             ExpectedSafe: false,
             LockSeatNaiveAsync),
         new SeatLockStrategy(
@@ -55,7 +55,7 @@ public sealed class MongoSeatLocker : ISeatLocker
             LockSeatAtomicAsync),
         new SeatLockStrategy(
             "Mongo ATOMIC (guard on the status we read & checked)",
-            "same read-check as naive, but the write filters on `status = seat.Status` (the observed value) — a compare-and-swap; the loser matches 0 docs",
+            "same read-check as naive, but the write filters on `status = seat.Status` (the observed value) - a compare-and-swap; the loser matches 0 docs",
             ExpectedSafe: true,
             LockSeatReadStatusGuardAsync),
     };
@@ -71,7 +71,7 @@ public sealed class MongoSeatLocker : ISeatLocker
     ///   B: updateOne({_id:1}, set reserved=BOB)   (matches _id, clobbers ALICE)
     /// </code>
     /// Because the update filter is <c>{_id}</c> only, B's write always matches and overwrites A's.
-    /// Both callers return <see cref="SeatLockOutcome.Reserved"/>. Lost update — document-level
+    /// Both callers return <see cref="SeatLockOutcome.Reserved"/>. Lost update - document-level
     /// atomicity never had a chance to help, because the decision lived between two commands.
     /// </summary>
     public async Task<SeatLockResult> LockSeatNaiveAsync(
@@ -98,7 +98,7 @@ public sealed class MongoSeatLocker : ISeatLocker
 
     /// <summary>
     /// ATOMIC lock_seat: optimistic compare-and-swap. Read the seat, then issue a single conditional
-    /// update whose filter carries the state we expect — <c>_id AND status='available'</c>.
+    /// update whose filter carries the state we expect - <c>_id AND status='available'</c>.
     /// Mongo applies the update to a single document atomically, so only one concurrent caller can
     /// match: the other's filter no longer matches (status flipped to 'reserved'), it modifies 0 docs,
     /// re-reads the now-'reserved' seat, and returns AlreadyTaken.
@@ -120,7 +120,7 @@ public sealed class MongoSeatLocker : ISeatLocker
             return new SeatLockResult(SeatLockOutcome.AlreadyTaken, seat.ReservedBy, seat.Version);
 
         // Compare-and-swap: the update only lands while the seat is still 'available'. Because the
-        // transition is one-way (available -> reserved), the status guard alone is enough — the loser's
+        // transition is one-way (available -> reserved), the status guard alone is enough - the loser's
         // filter matches 0 docs once the winner flips it. (A version guard would additionally cover the
         // ABA case where a seat bounces reserved -> available -> reserved between our read and write,
         // which this flow never does.)
@@ -145,7 +145,7 @@ public sealed class MongoSeatLocker : ISeatLocker
     }
 
     /// <summary>
-    /// ATOMIC via a read-status guard — the exact shape of the "correct" Mongo shell snippet, except the
+    /// ATOMIC via a read-status guard - the exact shape of the "correct" Mongo shell snippet, except the
     /// guard value is the status we actually read and checked in code, not a hard-coded "available":
     /// <code>
     ///   var seat = find({_id});                  // read
@@ -158,12 +158,12 @@ public sealed class MongoSeatLocker : ISeatLocker
     /// Does it work? Yes. Putting the observed status into the filter turns the write into a compare-and-swap:
     /// it only lands while the document still holds the value we saw. If a concurrent caller reserved the seat
     /// between our read and our write, its status is no longer what we read, our filter matches 0 docs, and we
-    /// lose the race cleanly instead of clobbering them — no lost update. The single line that separates this
+    /// lose the race cleanly instead of clobbering them - no lost update. The single line that separates this
     /// from <see cref="LockSeatNaiveAsync"/> is the extra <c>status = seat.Status</c> term in the filter.
     ///
     /// Where the read-value guard is enough, and where it isn't: the seat only ever goes
     /// available -> reserved (one-way), so "status == the value I read" is as strong as a version check. It
-    /// would break under ABA — if a seat could go available -> reserved -> available again between our read and
+    /// would break under ABA - if a seat could go available -> reserved -> available again between our read and
     /// write, the status would match a second time and we'd overwrite the newer holder. That ABA case is why
     /// <see cref="LockSeatAtomicAsync"/> guards on the monotonic <c>version</c> instead.
     /// </summary>

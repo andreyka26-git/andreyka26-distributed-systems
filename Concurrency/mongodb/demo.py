@@ -88,7 +88,7 @@ def run_two(worker):
 
 
 # --------------------------------------------------------------------------- #
-# 1. LOST UPDATE — THE BUG
+# 1. LOST UPDATE - THE BUG
 # --------------------------------------------------------------------------- #
 def scenario_lost_update():
     header("1. LOST UPDATE  (read, then unconditional write)  -- THE BUG")
@@ -115,7 +115,7 @@ def scenario_lost_update():
 
 
 # --------------------------------------------------------------------------- #
-# 2. OPTIMISTIC — atomic conditional update (the idiomatic Mongo fix)
+# 2. OPTIMISTIC - atomic conditional update (the idiomatic Mongo fix)
 # --------------------------------------------------------------------------- #
 def scenario_optimistic_status():
     header("2. OPTIMISTIC  (atomic conditional updateOne on status)  -- FIX")
@@ -142,7 +142,7 @@ def scenario_optimistic_status():
 
 
 # --------------------------------------------------------------------------- #
-# 3. OPTIMISTIC — explicit version field
+# 3. OPTIMISTIC - explicit version field
 # --------------------------------------------------------------------------- #
 def scenario_optimistic_version():
     header("3. OPTIMISTIC  (explicit version field)  -- FIX")
@@ -164,12 +164,12 @@ def scenario_optimistic_version():
 
     run_two(worker)
     report(winners, final_seat())
-    print("  WHY: same as #2 but with a version counter — the general pattern when")
+    print("  WHY: same as #2 but with a version counter - the general pattern when")
     print("       you edit many fields and can't express the guard as one field.")
 
 
 # --------------------------------------------------------------------------- #
-# 4. PESSIMISTIC-ish — multi-document transaction -> WriteConflict
+# 4. PESSIMISTIC-ish - multi-document transaction -> WriteConflict
 # --------------------------------------------------------------------------- #
 def scenario_transaction_conflict():
     header("4. TRANSACTION  (two txns on same doc -> WriteConflict)  -- FIX")

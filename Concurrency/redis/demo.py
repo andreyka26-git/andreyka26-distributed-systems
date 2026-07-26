@@ -65,10 +65,10 @@ def run_two(worker):
 
 
 # --------------------------------------------------------------------------- #
-# 1. GET then SET — THE BUG
+# 1. GET then SET - THE BUG
 # --------------------------------------------------------------------------- #
 def scenario_get_then_set():
-    header("1. GET-then-SET  (check, then act — two round-trips)  -- THE BUG")
+    header("1. GET-then-SET  (check, then act - two round-trips)  -- THE BUG")
     r.delete(SEAT)
     winners = []
     barrier = threading.Barrier(2)
@@ -88,7 +88,7 @@ def scenario_get_then_set():
 
 
 # --------------------------------------------------------------------------- #
-# 2. SET NX — ATOMIC
+# 2. SET NX - ATOMIC
 # --------------------------------------------------------------------------- #
 def scenario_setnx():
     header("2. SET key val NX  (atomic 'set if not exists')  -- FIX")
@@ -111,7 +111,7 @@ def scenario_setnx():
 
 
 # --------------------------------------------------------------------------- #
-# 3. LUA — ATOMIC check-and-set script
+# 3. LUA - ATOMIC check-and-set script
 # --------------------------------------------------------------------------- #
 RESERVE_LUA = """
 -- KEYS[1] = seat hash, ARGV[1] = customer name
@@ -146,7 +146,7 @@ def scenario_lua():
 
 
 # --------------------------------------------------------------------------- #
-# 4. WATCH / MULTI / EXEC — OPTIMISTIC
+# 4. WATCH / MULTI / EXEC - OPTIMISTIC
 # --------------------------------------------------------------------------- #
 def scenario_watch():
     header("4. WATCH / MULTI / EXEC  (optimistic transaction)  -- FIX")

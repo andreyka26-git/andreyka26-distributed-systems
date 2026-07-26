@@ -9,7 +9,7 @@ Scenarios:
 DynamoDB has NO pessimistic locks (no SELECT ... FOR UPDATE, no blocking). The
 ONLY native concurrency control is the OPTIMISTIC conditional write. The loser
 gets a ConditionalCheckFailedException and must retry. (TransactWriteItems also
-uses conditions and is still optimistic — see README.)
+uses conditions and is still optimistic - see README.)
 """
 import os
 import sys
@@ -94,7 +94,7 @@ def run_two(worker):
 
 
 # --------------------------------------------------------------------------- #
-# 1. LOST UPDATE — THE BUG
+# 1. LOST UPDATE - THE BUG
 # --------------------------------------------------------------------------- #
 def scenario_lost_update():
     header("1. LOST UPDATE  (get_item, then unconditional put_item)  -- THE BUG")
@@ -119,7 +119,7 @@ def scenario_lost_update():
 
 
 # --------------------------------------------------------------------------- #
-# 2. OPTIMISTIC — ConditionExpression on status
+# 2. OPTIMISTIC - ConditionExpression on status
 # --------------------------------------------------------------------------- #
 def scenario_optimistic_status():
     header("2. OPTIMISTIC  (update_item ConditionExpression status='available')  -- FIX")
@@ -157,7 +157,7 @@ def scenario_optimistic_status():
 
 
 # --------------------------------------------------------------------------- #
-# 3. OPTIMISTIC — version attribute
+# 3. OPTIMISTIC - version attribute
 # --------------------------------------------------------------------------- #
 def scenario_optimistic_version():
     header("3. OPTIMISTIC  (version attribute)  -- FIX")
@@ -189,7 +189,7 @@ def scenario_optimistic_version():
 
     run_two(worker)
     report(winners, final_seat())
-    print("  WHY: classic optimistic locking — bump version only if it matches the")
+    print("  WHY: classic optimistic locking - bump version only if it matches the")
     print("       one you read. The DynamoDBMapper @DynamoDBVersionAttribute does this.")
 
 

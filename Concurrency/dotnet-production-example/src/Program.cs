@@ -93,8 +93,8 @@ async Task RunScenarioAsync(ISeatLocker locker, SeatLockStrategy strategy)
         ? "  CORRECT: exactly one customer got the seat."
         : $"  DOUBLE BOOKING: {winners.Count} customers were told 'you got it'.");
     Console.WriteLine(correct == strategy.ExpectedSafe
-        ? $"  (as expected — {(strategy.ExpectedSafe ? "safe strategy" : "broken strategy demonstrates the lost update")})"
-        : "  (!! unexpected outcome for this strategy — rerun; the race may not have interleaved)");
+        ? $"  (as expected - {(strategy.ExpectedSafe ? "safe strategy" : "broken strategy demonstrates the lost update")})"
+        : "  (!! unexpected outcome for this strategy - rerun; the race may not have interleaved)");
     Console.WriteLine($"  why: {strategy.Why}");
 }
 

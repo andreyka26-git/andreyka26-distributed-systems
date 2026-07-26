@@ -3,15 +3,15 @@ namespace SeatLocking;
 /// <summary>How a <c>lock_seat</c> attempt ended.</summary>
 public enum SeatLockOutcome
 {
-    /// <summary>This caller won — the seat is now reserved by them.</summary>
+    /// <summary>This caller won - the seat is now reserved by them.</summary>
     Reserved,
 
     /// <summary>Someone else already holds the seat. The caller backed off cleanly.</summary>
     AlreadyTaken,
 
     /// <summary>
-    /// The write neither landed nor identified a holder. No strategy retries — losing a race yields
-    /// <see cref="AlreadyTaken"/> — so this is left for the "defensive" row-count guard in
+    /// The write neither landed nor identified a holder. No strategy retries - losing a race yields
+    /// <see cref="AlreadyTaken"/> - so this is left for the "defensive" row-count guard in
     /// <c>LockSeatDirtyWriteAsync</c>, which exists to show that such a guard never actually fires.
     /// </summary>
     Conflict
@@ -31,7 +31,7 @@ public sealed record SeatSnapshot(string Status, string? ReservedBy, int Version
 
 /// <summary>
 /// One concrete way to run <c>lock_seat</c>. A backend (Postgres/Redis/Mongo) exposes several of
-/// these — some deliberately broken to show a lost update, some safe — and the demo runner treats
+/// these - some deliberately broken to show a lost update, some safe - and the demo runner treats
 /// them uniformly: park two customers, release them together, then check who "won".
 /// </summary>
 /// <param name="Name">Human label, e.g. "Redis SET NX (atomic set-if-absent)".</param>
@@ -46,7 +46,7 @@ public sealed record SeatLockStrategy(
 
 /// <summary>
 /// Strategy-pattern seam over the three data stores. Each implementation reserves a seat "for one
-/// customer only", but the mechanics — row locks, set-if-absent, atomic conditional updates — differ
+/// customer only", but the mechanics - row locks, set-if-absent, atomic conditional updates - differ
 /// per store. <see cref="Strategies"/> is the family of interchangeable algorithms for that store.
 /// </summary>
 public interface ISeatLocker

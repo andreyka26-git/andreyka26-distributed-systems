@@ -1,4 +1,4 @@
 services:
   app:
     build: .
-    # No storage container needed — the "store" is a Python dict in this process.
+    # No storage container needed - the "store" is a Python dict in this process.

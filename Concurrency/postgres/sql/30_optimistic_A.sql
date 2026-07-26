@@ -13,7 +13,7 @@ SELECT id, status, version FROM seats WHERE id = 1;
 
 -- >>> SWITCH WINDOW: run STEP 3 and STEP 4 in SESSION B <<<
 
--- STEP 5 (A): conditional update — only succeeds if version is still 0.
+-- STEP 5 (A): conditional update - only succeeds if version is still 0.
 UPDATE seats
    SET status = 'reserved', reserved_by = 'ALICE', version = version + 1
  WHERE id = 1 AND version = 0;          -- 0 = the version we read in STEP 2
@@ -22,4 +22,4 @@ UPDATE seats
 -- STEP 6 (A):
 COMMIT;
 
--- >>> SWITCH WINDOW: B's STEP 7 UPDATE will report "UPDATE 0" — it lost. <<<
+-- >>> SWITCH WINDOW: B's STEP 7 UPDATE will report "UPDATE 0" - it lost. <<<

@@ -5,20 +5,20 @@ namespace SeatLocking;
 
 /// <summary>
 /// Postgres implementation of <see cref="ISeatLocker"/> using Dapper. Exposes four <c>lock_seat</c>
-/// strategies — two safe, two illustrative — so you can watch how the SAME race plays out under
+/// strategies - two safe, two illustrative - so you can watch how the SAME race plays out under
 /// different isolation and locking choices:
 /// <list type="bullet">
-///   <item><see cref="LockSeatPessimisticAsync"/> — row lock up front (<c>SELECT ... FOR UPDATE</c>). Safe.</item>
-///   <item><see cref="LockSeatOptimisticAsync"/> — no lock; a status compare-and-swap. Safe.</item>
-///   <item><see cref="LockSeatRepeatableReadAsync"/> — unconditional write, but snapshot isolation aborts the loser. Safe.</item>
-///   <item><see cref="LockSeatDirtyWriteAsync"/> — naive read-modify-write. LOST UPDATE (do not ship).</item>
+///   <item><see cref="LockSeatPessimisticAsync"/> - row lock up front (<c>SELECT ... FOR UPDATE</c>). Safe.</item>
+///   <item><see cref="LockSeatOptimisticAsync"/> - no lock; a status compare-and-swap. Safe.</item>
+///   <item><see cref="LockSeatRepeatableReadAsync"/> - unconditional write, but snapshot isolation aborts the loser. Safe.</item>
+///   <item><see cref="LockSeatDirtyWriteAsync"/> - naive read-modify-write. LOST UPDATE (do not ship).</item>
 /// </list>
 ///
 /// Every method here opens an explicit transaction, including the read-only ones. That is deliberate:
 /// the point of the demo is to reason about isolation levels, and an isolation level only means
 /// something relative to a transaction boundary you can see in the code.
 ///
-/// None of the strategies retry. Losing the race is not a transient failure to paper over — it is the
+/// None of the strategies retry. Losing the race is not a transient failure to paper over - it is the
 /// answer: the seat is reserved by someone else, and reserving is one-way, so a second attempt can only
 /// ever re-read the same 'reserved' row. The loser reads the winner once and returns AlreadyTaken.
 /// </summary>
@@ -34,7 +34,7 @@ public sealed class PostgresSeatLocker : ISeatLocker
     {
         new SeatLockStrategy(
             "Postgres DIRTY WRITE (read-modify-write, no guard)",
-            "both callers read 'available' and both UPDATE ... WHERE id — the last COMMIT clobbers the first",
+            "both callers read 'available' and both UPDATE ... WHERE id - the last COMMIT clobbers the first",
             ExpectedSafe: false,
             LockSeatDirtyWriteAsync),
         new SeatLockStrategy(
@@ -65,7 +65,7 @@ public sealed class PostgresSeatLocker : ISeatLocker
     /// PESSIMISTIC lock_seat: lock the row before reading it, so concurrent callers are fully serialized.
     ///
     /// The second caller BLOCKS on <c>FOR UPDATE</c> until the first transaction commits, then sees the
-    /// seat is already 'reserved' and backs off. Best when contention on the same row is high — you pay
+    /// seat is already 'reserved' and backs off. Best when contention on the same row is high - you pay
     /// with a held lock, but you never waste work.
     /// </summary>
     public async Task<SeatLockResult> LockSeatPessimisticAsync(
@@ -100,11 +100,11 @@ public sealed class PostgresSeatLocker : ISeatLocker
     /// <summary>
     /// OPTIMISTIC lock_seat: no locks. Read the current status, then write conditionally with
     /// <c>WHERE id = @id AND status = @status</c>. If the status moved under us the UPDATE touches
-    /// 0 rows and we lost the race. Best when conflicts are rare — callers never wait on a lock.
+    /// 0 rows and we lost the race. Best when conflicts are rare - callers never wait on a lock.
     ///
     /// The whole flow runs in one explicit transaction at READ COMMITTED (Postgres' default). Note what
     /// READ COMMITTED buys us on the loser path: each statement takes a FRESH snapshot, so the re-read
-    /// after a 0-row UPDATE — still inside our own transaction — does see the winner's committed row.
+    /// after a 0-row UPDATE - still inside our own transaction - does see the winner's committed row.
     /// (Under REPEATABLE READ that same re-read would return our frozen snapshot's 'available' and tell
     /// us nothing, which is exactly why <see cref="LockSeatRepeatableReadAsync"/> has to open a second
     /// transaction to find the winner.)
@@ -147,7 +147,7 @@ public sealed class PostgresSeatLocker : ISeatLocker
         }
 
         // rows == 0 -> the winner committed between our SELECT and our UPDATE. Re-read (new statement,
-        // new snapshot) to report who holds the seat, then roll back — we wrote nothing.
+        // new snapshot) to report who holds the seat, then roll back - we wrote nothing.
         var winner = await conn.QuerySingleOrDefaultAsync<SeatRow>(new CommandDefinition(
             "SELECT id, status, reserved_by, version FROM seats WHERE id = @seatId",
             new { seatId }, tx, cancellationToken: ct));
@@ -159,7 +159,7 @@ public sealed class PostgresSeatLocker : ISeatLocker
 
     /// <summary>
     /// BROKEN lock_seat (do NOT ship): the naive read-modify-write, now wrapped in a transaction and
-    /// checking the affected row count — to show that neither of those "fixes" actually helps.
+    /// checking the affected row count - to show that neither of those "fixes" actually helps.
     ///
     /// Read the status, decide in application code whether the seat is free, then write
     /// UNCONDITIONALLY: <c>WHERE id = @seatId</c> with no <c>status</c> guard and no version check.
@@ -169,7 +169,7 @@ public sealed class PostgresSeatLocker : ISeatLocker
     ///   A: BEGIN
     ///   B: BEGIN
     ///   A: SELECT -> status = 'available'      (A decides: free, I'll take it)
-    ///   B: SELECT -> status = 'available'      (B decides: free — A hasn't committed, B can't see it)
+    ///   B: SELECT -> status = 'available'      (B decides: free - A hasn't committed, B can't see it)
     ///   A: UPDATE ... WHERE id = @seatId       (matches 1 row, takes the row's write lock)
     ///   A: COMMIT                              (lock released)
     ///   B: UPDATE ... WHERE id = @seatId       (blocked on A's lock; unblocks, STILL matches id -> 1 row)
@@ -203,7 +203,7 @@ public sealed class PostgresSeatLocker : ISeatLocker
 
         // THE BUG: the WHERE clause only matches on id, not status. Between the SELECT above and
         // this UPDATE another caller can reserve the seat; we overwrite them anyway. The row count
-        // check below looks defensive but is useless here — keyed on id alone, the UPDATE always
+        // check below looks defensive but is useless here - keyed on id alone, the UPDATE always
         // hits exactly 1 row, so `rows` can never surface the conflict. Lost update.
         var rows = await conn.ExecuteAsync(new CommandDefinition(
             "UPDATE seats SET status = 'reserved', reserved_by = @customer, version = version + 1 WHERE id = @seatId",
@@ -211,7 +211,7 @@ public sealed class PostgresSeatLocker : ISeatLocker
 
         if (rows != 1)
         {
-            // Never reached in practice — kept to show that even a row-count guard doesn't catch it.
+            // Never reached in practice - kept to show that even a row-count guard doesn't catch it.
             await tx.RollbackAsync(ct);
             return new SeatLockResult(SeatLockOutcome.Conflict, null, -1);
         }
@@ -223,7 +223,7 @@ public sealed class PostgresSeatLocker : ISeatLocker
     /// <summary>
     /// REPEATABLE READ lock_seat: the SAME unconditional read-modify-write as
     /// <see cref="LockSeatDirtyWriteAsync"/>, but the transaction runs at REPEATABLE READ. The only
-    /// change is the isolation level — yet now the lost update becomes impossible, because Postgres
+    /// change is the isolation level - yet now the lost update becomes impossible, because Postgres
     /// implements REPEATABLE READ with snapshot isolation and enforces "first updater wins".
     ///
     /// Each transaction sees a frozen snapshot taken at its first statement. When two callers both
@@ -242,7 +242,7 @@ public sealed class PostgresSeatLocker : ISeatLocker
     /// only has to interpret the abort. Contrast <see cref="LockSeatOptimisticAsync"/>, which gets the
     /// same safety at READ COMMITTED by making the guard explicit in the WHERE clause.
     ///
-    /// No retry: 40001 here is not a transient glitch, it is the verdict — someone committed 'reserved'
+    /// No retry: 40001 here is not a transient glitch, it is the verdict - someone committed 'reserved'
     /// ahead of us. Reserving is one-way, so a retried transaction could only read back the same holder.
     /// We report it instead. Finding out who won does need a SECOND transaction: our first one is
     /// aborted (every further statement in it fails with 25P02 until rollback), and even if it weren't,
@@ -270,7 +270,7 @@ public sealed class PostgresSeatLocker : ISeatLocker
                 return new SeatLockResult(SeatLockOutcome.AlreadyTaken, seat.ReservedBy, seat.Version);
             }
 
-            // Unconditional write — no status guard. Under REPEATABLE READ this is still safe:
+            // Unconditional write - no status guard. Under REPEATABLE READ this is still safe:
             // if a concurrent txn committed a change to this row after our snapshot, the UPDATE
             // fails with 40001 instead of clobbering it.
             await conn.ExecuteAsync(new CommandDefinition(
@@ -322,7 +322,7 @@ public sealed class PostgresSeatLocker : ISeatLocker
 
     /// <summary>
     /// Read the current seat row (for reporting). The transaction is explicit for consistency with the
-    /// rest of the class — it is a normal READ COMMITTED transaction that happens to only read, not a
+    /// rest of the class - it is a normal READ COMMITTED transaction that happens to only read, not a
     /// declared <c>READ ONLY</c> one.
     /// </summary>
     public async Task<SeatSnapshot?> GetSeatAsync(int seatId, CancellationToken ct = default)

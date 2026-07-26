@@ -7,13 +7,13 @@ namespace SeatLocking;
 /// string key <c>seat:{id}</c>: absent means 'available', present means 'reserved' and the value is
 /// the holder's name. Three <c>lock_seat</c> strategies, escalating in atomicity:
 /// <list type="bullet">
-///   <item><see cref="LockSeatNaiveSetAsync"/> — GET, decide in app code, then plain SET. LOST UPDATE.</item>
-///   <item><see cref="LockSeatSetNxAsync"/> — <c>SET key val NX</c>, one atomic set-if-absent. Safe.</item>
-///   <item><see cref="LockSeatLuaAsync"/> — the whole check-and-set as one server-side Lua script. Safe.</item>
+///   <item><see cref="LockSeatNaiveSetAsync"/> - GET, decide in app code, then plain SET. LOST UPDATE.</item>
+///   <item><see cref="LockSeatSetNxAsync"/> - <c>SET key val NX</c>, one atomic set-if-absent. Safe.</item>
+///   <item><see cref="LockSeatLuaAsync"/> - the whole check-and-set as one server-side Lua script. Safe.</item>
 /// </list>
 ///
 /// Redis executes each command (and each Lua script) atomically on a single thread, so the fix here
-/// is never "take a lock" — it's "collapse the read and the write into one atomic operation".
+/// is never "take a lock" - it's "collapse the read and the write into one atomic operation".
 /// </summary>
 public sealed class RedisSeatLocker : ISeatLocker
 {
@@ -27,7 +27,7 @@ public sealed class RedisSeatLocker : ISeatLocker
     {
         new SeatLockStrategy(
             "Redis NAIVE SET (GET, check, unconditional SET)",
-            "both callers GET nil, both decide 'free', both SET — the last write wins and clobbers the first",
+            "both callers GET nil, both decide 'free', both SET - the last write wins and clobbers the first",
             ExpectedSafe: false,
             LockSeatNaiveSetAsync),
         new SeatLockStrategy(
@@ -51,12 +51,12 @@ public sealed class RedisSeatLocker : ISeatLocker
     /// caller can slip in:
     /// <code>
     ///   A: GET seat:1 -> (nil)     (A decides: free, I'll take it)
-    ///   B: GET seat:1 -> (nil)     (B decides: free too — A hasn't written yet)
+    ///   B: GET seat:1 -> (nil)     (B decides: free too - A hasn't written yet)
     ///   A: SET seat:1 ALICE        (unconditional)
-    ///   B: SET seat:1 BOB          (unconditional — clobbers ALICE)
+    ///   B: SET seat:1 BOB          (unconditional - clobbers ALICE)
     /// </code>
     /// Both callers return <see cref="SeatLockOutcome.Reserved"/>; the seat ends up held by whoever
-    /// SET last. Classic lost update — the atomicity of individual commands buys you nothing when the
+    /// SET last. Classic lost update - the atomicity of individual commands buys you nothing when the
     /// decision spans two of them.
     /// </summary>
     public async Task<SeatLockResult> LockSeatNaiveSetAsync(

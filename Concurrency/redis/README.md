@@ -1,4 +1,4 @@
-# Redis — atomic operations & optimistic transactions
+# Redis - atomic operations & optimistic transactions
 
 ```bash
 docker compose up --build
@@ -18,7 +18,7 @@ docker compose up --build
 Redis executes commands **single-threaded**, one at a time. So:
 
 - **A single command is atomic.** `SET ... NX` does the "is it free?" check *and* the set
-  in one indivisible step — the race window in scenario 1 simply doesn't exist. (`SETNX` is
+  in one indivisible step - the race window in scenario 1 simply doesn't exist. (`SETNX` is
   the legacy dedicated command; `SET k v NX EX 30` is the modern form, and adding `EX` gives
   the lock a TTL so a crashed holder doesn't deadlock everyone.)
 - **A Lua script is atomic.** Use it when "check-and-set" is *more than one command*
@@ -28,7 +28,7 @@ Redis executes commands **single-threaded**, one at a time. So:
   compare-and-swap at the key level.
 
 > Redis has **no pessimistic blocking lock primitive** built in. "Locks" in Redis are built
-> *from* the atomic `SET NX EX` (single instance) or the Redlock algorithm (multi instance) —
+> *from* the atomic `SET NX EX` (single instance) or the Redlock algorithm (multi instance) -
 > i.e. they're atomic/optimistic constructions, not the server blocking a waiter.
 
 Poke it:

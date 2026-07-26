@@ -92,7 +92,7 @@ def report(winners, row):
 
 
 # --------------------------------------------------------------------------- #
-# 1. LOST UPDATE  — THE BUG
+# 1. LOST UPDATE  - THE BUG
 # --------------------------------------------------------------------------- #
 def scenario_lost_update():
     header("1. LOST UPDATE  (READ COMMITTED, read-then-write, NO guard)  -- THE BUG")
@@ -126,7 +126,7 @@ def scenario_lost_update():
 
 
 # --------------------------------------------------------------------------- #
-# 2. OPTIMISTIC  — FIX via version column
+# 2. OPTIMISTIC  - FIX via version column
 # --------------------------------------------------------------------------- #
 def scenario_optimistic():
     header("2. OPTIMISTIC  (version column, conditional UPDATE)  -- FIX")
@@ -163,7 +163,7 @@ def scenario_optimistic():
 
 
 # --------------------------------------------------------------------------- #
-# 3. PESSIMISTIC  — FIX via SELECT ... FOR UPDATE
+# 3. PESSIMISTIC  - FIX via SELECT ... FOR UPDATE
 # --------------------------------------------------------------------------- #
 def scenario_pessimistic():
     header("3. PESSIMISTIC  (SELECT ... FOR UPDATE row lock)  -- FIX")
@@ -196,7 +196,7 @@ def scenario_pessimistic():
 
 
 # --------------------------------------------------------------------------- #
-# 4. REPEATABLE READ  — FIX, DB raises serialization_failure (40001)
+# 4. REPEATABLE READ  - FIX, DB raises serialization_failure (40001)
 # --------------------------------------------------------------------------- #
 def scenario_repeatable_read():
     header("4. REPEATABLE READ  (DB raises 40001 on conflicting write)  -- FIX")
@@ -251,4 +251,4 @@ if __name__ == "__main__":
     scenario_optimistic()
     scenario_pessimistic()
     scenario_repeatable_read()
-    print("\nDone. The `postgres` container is still up — try the ./sql/ files in pgAdmin.\n")
+    print("\nDone. The `postgres` container is still up - try the ./sql/ files in pgAdmin.\n")

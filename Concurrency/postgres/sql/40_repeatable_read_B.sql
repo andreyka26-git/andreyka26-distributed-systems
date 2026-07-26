@@ -6,7 +6,7 @@
 -- STEP 3 (B):
 BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 
--- STEP 4 (B): B fixes its OWN snapshot — it still sees 'available'.
+-- STEP 4 (B): B fixes its OWN snapshot - it still sees 'available'.
 SELECT id, status FROM seats WHERE id = 1;
 --   -> 'available'
 
@@ -20,7 +20,7 @@ UPDATE seats SET status = 'reserved', reserved_by = 'BOB' WHERE id = 1;
 --     ERROR:  could not serialize access due to concurrent update
 --     SQLSTATE: 40001
 --
---   The WHOLE transaction B is aborted — nothing it did survives.
+--   The WHOLE transaction B is aborted - nothing it did survives.
 
 -- STEP 8 (B): the tx is already aborted; clean up.
 ROLLBACK;
