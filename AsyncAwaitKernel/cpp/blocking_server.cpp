@@ -1,8 +1,14 @@
 // blocking_server.cpp
 //
-// Echo server built on BLOCKING read(). One thread per connection.
+// Echo server built on a BLOCKING read(). One thread per connection.
+// Builds and runs on Linux, macOS and Windows (see crossplatform/platform.h for the
+// socket shims).
 //
-// This is the code path drawn in socket-blocking-kernel.excalidraw.png:
+//   ./blocking_server                 one thread per connection (the classic design)
+//   ./blocking_server --single-thread ONE thread for everything - the drawback, live
+//
+// This is the code path drawn in socket-blocking-kernel.excalidraw.png. The names
+// below are Linux's; macOS and Windows do the same thing with different spellings.
 //
 //   read(sk) with empty sk_receive_queue and O_NONBLOCK unset (timeo != 0)
 //     -> kernel puts wait-entry {func = wake-me, private = this task} on sk->sk_wq
@@ -18,21 +24,23 @@
 //     -> some later schedule() picks it; read() resumes right after schedule(),
 //        copies the bytes to userspace and returns.
 //
-// The cost of this model is one kernel task (8KB kernel stack + scheduler bookkeeping
-// + default 8MB user stack VMA) per idle connection. That is what epoll removes;
-// see epoll_server.cpp.
+// The thread is never the problem while it is asleep - it burns no CPU. The problem is
+// that it is a WHOLE THREAD, and that it can only ever be in one place at a time:
+//
+//   --single-thread: watch a silent client park the only thread inside read(). The
+//       heartbeat client's connection completes its handshake (the kernel holds it in
+//       the accept queue) and then just sits there: no accept(), no echo, nothing,
+//       until the silent client finally sends FIN. Run demo_clients.py and read the
+//       timestamps - that stall is the drawback, and it is why the default spawns.
+//
+//   default: correct again, at one kernel task (8KB kernel stack + scheduler
+//       bookkeeping + default 8MB user stack VMA) per idle connection. Every
+//       connection logs a DIFFERENT tid. That per-connection thread is what epoll
+//       removes; see epoll_server.cpp, where every line logs the same tid.
 
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/socket.h>
-#include <sys/syscall.h>
-#include <unistd.h>
+#include "crossplatform/platform.h"
 
 #include <atomic>
-#include <cerrno>
-#include <cstdio>
-#include <cstring>
 #include <string>
 #include <thread>
 
@@ -44,100 +52,115 @@ constexpr size_t kBufSize = 4096;
 
 std::atomic<int> g_live_connections{0};
 
-// glibc only exposes gettid() from 2.30 onward; go straight to the syscall so this
-// builds on older distros too. The tid is what /proc/<pid>/task/<tid>/ is keyed by.
-long thread_id() { return (long)syscall(SYS_gettid); }
-
-void die(const char* what) {
-    std::fprintf(stderr, "%s: %s\n", what, std::strerror(errno));
-    std::exit(1);
-}
-
-// Runs on its own thread. Everything here is synchronous: the thread is either
-// running on a CPU or sleeping in the socket's wait queue, never spinning.
-void handle_connection(int fd, std::string peer) {
+// Runs on its own thread (or, with --single-thread, on the accept thread itself).
+// Everything here is synchronous: the thread is either running on a CPU or sleeping in
+// the socket's wait queue, never spinning.
+void handle_connection(plat::socket_t fd, std::string peer) {
     int n_live = ++g_live_connections;
-    std::printf("[conn fd=%d %s] open (live=%d, tid=%ld)\n", fd, peer.c_str(), n_live,
-                thread_id());
+    plat::logf("conn fd=%lld %s: open, this thread now owns it (live=%d)", (long long)fd,
+               peer.c_str(), n_live);
+
+    plat::suppress_sigpipe(fd);
 
     char buf[kBufSize];
     for (;;) {
         // *** THE BLOCKING CALL ***
-        // If sk_receive_queue is empty this thread is descheduled here. Check with:
+        // If sk_receive_queue is empty this thread is descheduled here. On Linux:
         //   cat /proc/<pid>/task/<tid>/stat   -> state field is 'S' (interruptible sleep)
         //   cat /proc/<pid>/task/<tid>/wchan  -> e.g. sk_wait_data / inet_csk_accept
-        ssize_t n = read(fd, buf, sizeof(buf));
+        plat::logf("conn fd=%lld: parked in recv() - this thread is now asleep on this "
+                   "socket's wait queue and can do NOTHING else",
+                   (long long)fd);
+        long long n = plat::net_recv(fd, buf, sizeof(buf));
 
         if (n == 0) {  // peer sent FIN
-            std::printf("[conn fd=%d] peer closed\n", fd);
+            plat::logf("conn fd=%lld: peer closed", (long long)fd);
             break;
         }
         if (n < 0) {
-            if (errno == EINTR) continue;  // signal, not an error
-            std::fprintf(stderr, "[conn fd=%d] read: %s\n", fd, std::strerror(errno));
+            int e = plat::last_error();
+            if (plat::interrupted(e)) continue;  // signal, not an error
+            plat::elogf("conn fd=%lld: recv: %s", (long long)fd,
+                        plat::error_string(e).c_str());
             break;
         }
 
-        std::printf("[conn fd=%d] woke up with %zd bytes\n", fd, n);
+        plat::logf("conn fd=%lld: woke up with %lld bytes, echoing them back",
+                   (long long)fd, n);
 
-        // write() can block too (when the send buffer is full it sleeps on the same
+        // send() can block too (when the send buffer is full it sleeps on the same
         // socket's wait queue, woken by ACKs freeing space). Loop over short writes.
-        ssize_t off = 0;
+        long long off = 0;
+        bool failed = false;
         while (off < n) {
-            ssize_t w = write(fd, buf + off, (size_t)(n - off));
+            long long w = plat::net_send(fd, buf + off, (size_t)(n - off));
             if (w < 0) {
-                if (errno == EINTR) continue;
-                std::fprintf(stderr, "[conn fd=%d] write: %s\n", fd, std::strerror(errno));
-                goto done;
+                int e = plat::last_error();
+                if (plat::interrupted(e)) continue;
+                plat::elogf("conn fd=%lld: send: %s", (long long)fd,
+                            plat::error_string(e).c_str());
+                failed = true;
+                break;
             }
             off += w;
         }
+        if (failed) break;
     }
-done:
-    close(fd);
+
+    plat::close_socket(fd);
     n_live = --g_live_connections;
-    std::printf("[conn fd=%d] closed (live=%d)\n", fd, n_live);
+    plat::logf("conn fd=%lld: closed (live=%d)", (long long)fd, n_live);
 }
 
 }  // namespace
 
-int main() {
-    int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (listen_fd < 0) die("socket");
+int main(int argc, char** argv) {
+    bool single_thread = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--single-thread") == 0) {
+            single_thread = true;
+        } else {
+            std::fprintf(stderr, "usage: %s [--single-thread]\n", argv[0]);
+            return 2;
+        }
+    }
 
-    int one = 1;
-    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+    plat::NetInit net_init;  // WSAStartup on Windows, nothing anywhere else
+    plat::unbuffer_stdout();
 
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(kPort);
+    plat::socket_t listen_fd = plat::make_listener(kPort, kBacklog);
 
-    if (bind(listen_fd, (sockaddr*)&addr, sizeof(addr)) < 0) die("bind");
-    if (listen(listen_fd, kBacklog) < 0) die("listen");
-
-    std::printf("blocking echo server on port %d (pid=%d)\n", kPort, getpid());
-    std::printf("one thread per connection; each idle thread sleeps in the socket's "
-                "wait queue\n");
+    plat::logf("blocking echo server on port %d (pid=%ld), mode=%s", kPort,
+               plat::process_id(),
+               single_thread ? "SINGLE THREAD (the drawback)" : "thread per connection");
+    plat::logf("every line below is tagged with the OS thread id - watch how many "
+               "distinct ones show up");
 
     for (;;) {
         sockaddr_in peer{};
-        socklen_t peer_len = sizeof(peer);
+        plat::socklen_t_compat peer_len = sizeof(peer);
 
         // accept() blocks exactly like read() does: the listening socket has its own
         // wait queue, and the wakeup comes from the softirq that completes the
         // three-way handshake and pushes the new sock onto the accept queue.
-        int fd = accept(listen_fd, (sockaddr*)&peer, &peer_len);
-        if (fd < 0) {
-            if (errno == EINTR) continue;
-            die("accept");
+        plat::logf("parked in accept() - waiting for a new connection");
+        plat::socket_t fd = accept(listen_fd, (sockaddr*)&peer, &peer_len);
+        if (fd == plat::kInvalidSocket) {
+            if (plat::interrupted(plat::last_error())) continue;
+            plat::die("accept");
         }
 
-        char ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &peer.sin_addr, ip, sizeof(ip));
-        std::string desc = std::string(ip) + ":" + std::to_string(ntohs(peer.sin_port));
-
-        // A whole kernel task per connection. This is the line that does not scale.
-        std::thread(handle_connection, fd, desc).detach();
+        if (single_thread) {
+            // No new thread: this call does not return until the client goes away, so
+            // the loop cannot come back round to accept(). Connections already through
+            // the handshake wait in the kernel's accept queue, invisible and unserved.
+            plat::logf("conn fd=%lld: handling INLINE - no other connection can be "
+                       "accepted or served until this one ends",
+                       (long long)fd);
+            handle_connection(fd, plat::peer_name(peer));
+        } else {
+            // A whole kernel task per connection. This is the line that does not scale.
+            std::thread(handle_connection, fd, plat::peer_name(peer)).detach();
+        }
     }
 }

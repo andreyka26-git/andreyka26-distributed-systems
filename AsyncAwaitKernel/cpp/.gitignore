@@ -1,4 +1,6 @@
+build/
 blocking_server
 epoll_server
-epoll_server_et
+*.exe
 *.o
+*.obj

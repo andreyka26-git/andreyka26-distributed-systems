@@ -1,7 +1,12 @@
 // epoll_server.cpp
 //
 // The same echo server, but ONE thread for every connection, using non-blocking
-// fds + epoll. This is socket-non-blocking-kernel.excalidraw.png.
+// sockets + a readiness notifier. This is socket-non-blocking-kernel.excalidraw.png.
+//
+// The notifier is whatever the OS provides - epoll on Linux, kqueue on macOS,
+// WSAPoll on Windows - behind the small Poller in poller.h. The walkthrough below is
+// epoll's, because that is what the diagram draws; kqueue is the same design with BSD
+// names, and poller.h notes where WSAPoll genuinely differs.
 //
 // SETUP - epoll_ctl(ADD, sk):
 //   kernel makes an epitem, inserts it into ep->rbr (red-black tree of monitored fds),
@@ -29,59 +34,29 @@
 //      stored entry) is how it knows which events fired and reflects state NOW,
 //      not state when the IRQ hit.
 //   5. Level-triggered: still-ready epitems are re-added to rdllist and reported
-//      again next call. Edge-triggered (EPOLLET): not re-added - so you MUST drain
-//      to EAGAIN or the event is lost. Build with -DUSE_EPOLLET to compare.
+//      again next call. Edge-triggered (EPOLLET / kqueue EV_CLEAR): not re-added - so
+//      you MUST drain to EAGAIN or the event is lost. Build with -DEDGE_TRIGGERED=ON
+//      to compare.
 //   6. read(sk) until EAGAIN, back to epoll_wait.
+//
+// Every log line below is tagged with the OS thread id, and there is only ever one of
+// them: the same tid accepts, reads, echoes and closes for every connection. Run
+// demo_clients.py against this server and against blocking_server and diff the tids. A
+// client that goes silent parks nothing here - it is just an epitem that stops turning
+// up on rdllist - so the heartbeat client keeps being served, on the beat.
 
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <netinet/in.h>
-#include <sys/epoll.h>
-#include <sys/socket.h>
-#include <sys/syscall.h>
-#include <unistd.h>
+#include "crossplatform/platform.h"
+#include "crossplatform/poller.h"
 
-#include <cerrno>
-#include <cstdio>
-#include <cstring>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace {
 
 constexpr int kPort = 9002;
 constexpr int kBacklog = 128;
-constexpr int kMaxEvents = 64;
 constexpr size_t kBufSize = 4096;
-
-#ifdef USE_EPOLLET
-constexpr uint32_t kTriggerMode = EPOLLET;
-constexpr const char* kTriggerName = "edge-triggered (EPOLLET)";
-#else
-constexpr uint32_t kTriggerMode = 0;
-constexpr const char* kTriggerName = "level-triggered (default)";
-#endif
-
-void die(const char* what) {
-    std::fprintf(stderr, "%s: %s\n", what, std::strerror(errno));
-    std::exit(1);
-}
-
-// Sets O_NONBLOCK on the fd: read()/accept() take the timeo == 0 branch and return
-// -EAGAIN instead of installing a wait-entry and calling schedule(). Same kernel code
-// path as the blocking case, one branch different.
-void set_nonblocking(int fd) {
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0) die("fcntl F_GETFL");
-    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) die("fcntl F_SETFL");
-}
-
-void epoll_add(int ep, int fd, uint32_t events) {
-    epoll_event ev{};
-    ev.events = events;
-    ev.data.fd = fd;
-    // This is the call that walks to the socket and installs ep_poll_callback on sk_wq.
-    if (epoll_ctl(ep, EPOLL_CTL_ADD, fd, &ev) < 0) die("epoll_ctl ADD");
-}
 
 // Per-connection state. A blocking server keeps this implicitly, on the thread's stack
 // and in its instruction pointer; with one thread for everything it has to become an
@@ -93,165 +68,162 @@ struct Conn {
     bool peer_closed = false;  // we saw FIN; still owe whatever is left in `out`
 };
 
-std::unordered_map<int, Conn> g_conns;
+std::unordered_map<plat::socket_t, Conn> g_conns;
 
-void close_conn(int ep, int fd) {
-    epoll_ctl(ep, EPOLL_CTL_DEL, fd, nullptr);  // removes epitem from rbr + sk_wq entry
+void close_conn(poller::Poller& p, plat::socket_t fd) {
+    p.del(fd);  // removes the epitem from rbr and the entry from sk_wq
     g_conns.erase(fd);
-    close(fd);
-    std::printf("[conn fd=%d] closed (live=%zu)\n", fd, g_conns.size());
+    plat::close_socket(fd);
+    plat::logf("conn fd=%lld: closed (live=%zu)", (long long)fd, g_conns.size());
 }
 
-// Rearm: ask only for what we currently care about. EPOLLOUT is requested only while
+// Rearm: ask only for what we currently care about. kWrite is requested only while
 // something is buffered (a writable socket is almost always ready, so a permanent
-// EPOLLOUT interest would wake us on every loop). EPOLLIN is dropped once the peer sent
+// write interest would wake us on every loop). kRead is dropped once the peer sent
 // FIN - EOF reads as "readable" forever, so a level-triggered loop would spin on it.
-void rearm(int ep, int fd, const Conn& c) {
-    epoll_event ev{};
-    ev.events = kTriggerMode;
-    if (!c.peer_closed) ev.events |= EPOLLIN | EPOLLRDHUP;
-    if (!c.out.empty()) ev.events |= EPOLLOUT;
-    ev.data.fd = fd;
-    if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &ev) < 0) die("epoll_ctl MOD");
+void rearm(poller::Poller& p, plat::socket_t fd, const Conn& c) {
+    unsigned interest = 0;
+    if (!c.peer_closed) interest |= poller::kRead;
+    if (!c.out.empty()) interest |= poller::kWrite;
+    p.mod(fd, interest);
 }
 
 // Try to flush what we owe. Returns false when the connection is finished (error, or
 // peer half-closed and we have handed back everything).
-bool flush_pending(int ep, int fd) {
+bool flush_pending(poller::Poller& p, plat::socket_t fd) {
     Conn& c = g_conns[fd];
     while (!c.out.empty()) {
-        ssize_t w = write(fd, c.out.data(), c.out.size());
+        long long w = plat::net_send(fd, c.out.data(), c.out.size());
         if (w > 0) {
             c.out.erase(0, (size_t)w);
             continue;
         }
-        if (w < 0 && errno == EINTR) continue;
-        if (w < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            // Send buffer full. A blocking write() would sleep on this same sk_wq until
-            // ACKs freed space; instead we keep the tail and ask epoll to tell us.
-            rearm(ep, fd, c);
+        int e = plat::last_error();
+        if (w < 0 && plat::interrupted(e)) continue;
+        if (w < 0 && plat::would_block(e)) {
+            // Send buffer full. A blocking send() would sleep on this same sk_wq until
+            // ACKs freed space; instead we keep the tail and ask the poller to tell us.
+            rearm(p, fd, c);
             return true;
         }
-        std::fprintf(stderr, "[conn fd=%d] write: %s\n", fd, std::strerror(errno));
+        plat::elogf("conn fd=%lld: send: %s", (long long)fd,
+                    plat::error_string(e).c_str());
         return false;
     }
     // Everything is out. If the peer already sent FIN there is nothing left to do.
     if (c.peer_closed) return false;
-    rearm(ep, fd, c);
+    rearm(p, fd, c);
     return true;
 }
 
-// Drain the socket. Under EPOLLET this loop to EAGAIN is mandatory: the epitem is not
-// re-added to rdllist, so bytes left behind produce no further wakeup. Under
+// Drain the socket. Under edge-triggered this loop to EAGAIN is mandatory: the epitem
+// is not re-added to rdllist, so bytes left behind produce no further wakeup. Under
 // level-triggered it is merely an optimisation (fewer epoll_wait round trips).
-bool drain_and_echo(int ep, int fd) {
+bool drain_and_echo(poller::Poller& p, plat::socket_t fd) {
     Conn& c = g_conns[fd];
     char buf[kBufSize];
     for (;;) {
-        ssize_t n = read(fd, buf, sizeof(buf));
+        long long n = plat::net_recv(fd, buf, sizeof(buf));
         if (n > 0) {
-            std::printf("[conn fd=%d] read %zd bytes\n", fd, n);
+            plat::logf("conn fd=%lld: read %lld bytes, echoing them back",
+                       (long long)fd, n);
             c.out.append(buf, (size_t)n);
             continue;
         }
         if (n == 0) {  // FIN. Note we must still flush what we owe before closing -
-            std::printf("[conn fd=%d] peer closed\n", fd);  // the blocking server got
-            c.peer_closed = true;  // this for free by writing before it ever saw EOF.
+            plat::logf("conn fd=%lld: peer closed", (long long)fd);       // the blocking
+            c.peer_closed = true;  // server got this for free by writing before EOF.
             break;
         }
-        if (errno == EINTR) continue;
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        int e = plat::last_error();
+        if (plat::interrupted(e)) continue;
+        if (plat::would_block(e)) {
             // *** The whole point: socket drained, and we did NOT sleep in read(). ***
+            // A silent client costs this thread one EAGAIN, not a parked thread.
             break;
         }
-        std::fprintf(stderr, "[conn fd=%d] read: %s\n", fd, std::strerror(errno));
+        plat::elogf("conn fd=%lld: recv: %s", (long long)fd,
+                    plat::error_string(e).c_str());
         return false;
     }
-    return flush_pending(ep, fd);
+    return flush_pending(p, fd);
 }
 
-void accept_all(int ep, int listen_fd) {
+void accept_all(poller::Poller& p, plat::socket_t listen_fd) {
     for (;;) {
         sockaddr_in peer{};
-        socklen_t peer_len = sizeof(peer);
-        int fd = accept(listen_fd, (sockaddr*)&peer, &peer_len);
-        if (fd < 0) {
-            if (errno == EINTR) continue;
-            if (errno == EAGAIN || errno == EWOULDBLOCK) return;  // backlog drained
-            std::fprintf(stderr, "accept: %s\n", std::strerror(errno));
+        plat::socklen_t_compat peer_len = sizeof(peer);
+        plat::socket_t fd = accept(listen_fd, (sockaddr*)&peer, &peer_len);
+        if (fd == plat::kInvalidSocket) {
+            int e = plat::last_error();
+            if (plat::interrupted(e)) continue;
+            if (plat::would_block(e)) return;  // backlog drained
+            plat::elogf("accept: %s", plat::error_string(e).c_str());
             return;
         }
-        set_nonblocking(fd);
-        // EPOLLIN here means "data to read, or EOF"; on the listening socket it means
-        // "accept would succeed". EPOLLRDHUP catches the peer's half-close.
-        epoll_add(ep, fd, EPOLLIN | EPOLLRDHUP | kTriggerMode);
+        plat::set_nonblocking(fd);
+        plat::suppress_sigpipe(fd);
+        // kRead here means "data to read, or EOF"; on the listening socket it means
+        // "accept would succeed".
+        p.add(fd, poller::kRead);
         g_conns[fd];  // materialise the state object for this connection
 
-        char ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &peer.sin_addr, ip, sizeof(ip));
-        std::printf("[conn fd=%d %s:%u] open (live=%zu)\n", fd, ip,
-                    (unsigned)ntohs(peer.sin_port), g_conns.size());
+        plat::logf("conn fd=%lld %s: open, no thread was created for it (live=%zu)",
+                   (long long)fd, plat::peer_name(peer).c_str(), g_conns.size());
     }
 }
 
 }  // namespace
 
 int main() {
-    int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (listen_fd < 0) die("socket");
+    plat::NetInit net_init;  // WSAStartup on Windows, nothing anywhere else
+    plat::unbuffer_stdout();
 
-    int one = 1;
-    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+    plat::socket_t listen_fd = plat::make_listener(kPort, kBacklog);
+    plat::set_nonblocking(listen_fd);
 
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(kPort);
+    poller::Poller p;
+    p.add(listen_fd, poller::kRead);
 
-    if (bind(listen_fd, (sockaddr*)&addr, sizeof(addr)) < 0) die("bind");
-    if (listen(listen_fd, kBacklog) < 0) die("listen");
-    set_nonblocking(listen_fd);
+    plat::logf("%s echo server on port %d (pid=%ld), %s", poller::Poller::name(), kPort,
+               plat::process_id(), poller::kTriggerName);
+    plat::logf("single thread; idle connections cost an epitem, not a task - every line "
+               "below carries the same tid");
 
-    int ep = epoll_create1(0);  // allocates struct eventpoll: rbr, rdllist, ep->wq
-    if (ep < 0) die("epoll_create1");
-    epoll_add(ep, listen_fd, EPOLLIN | kTriggerMode);
-
-    std::printf("epoll echo server on port %d (pid=%d, tid=%ld), %s\n", kPort, getpid(),
-                (long)syscall(SYS_gettid), kTriggerName);
-    std::printf("single thread; idle connections cost an epitem, not a task\n");
-
-    epoll_event events[kMaxEvents];
+    std::vector<poller::Event> events;
     for (;;) {
         // *** THE ONLY PLACE THIS PROCESS EVER SLEEPS ***
         // rdllist empty -> this thread goes on ep->wq, TASK_INTERRUPTIBLE, schedule().
-        // Observe: /proc/<pid>/task/<tid>/wchan -> ep_poll.
-        int n = epoll_wait(ep, events, kMaxEvents, -1);
-        if (n < 0) {
-            if (errno == EINTR) continue;
-            die("epoll_wait");
-        }
+        // Observe: /proc/<pid>/task/<tid>/wchan -> ep_poll
+        plat::logf("epoll_wait: sleeping, watching %zu connection(s) + the listener",
+                   g_conns.size());
+        int n = p.wait(events);
+        plat::logf("epoll_wait: woke with %d ready fd(s)", n);
 
         // n events, each one an epitem the softirq pushed onto rdllist, re-polled by
         // epoll_wait for its live mask. No scanning of all fds - unlike select/poll,
         // the cost here is O(ready), not O(watched).
         for (int i = 0; i < n; ++i) {
-            int fd = events[i].data.fd;
-            uint32_t m = events[i].events;
+            plat::socket_t fd = events[i].fd;
+            unsigned m = events[i].mask;
 
             if (fd == listen_fd) {
-                accept_all(ep, listen_fd);
+                accept_all(p, listen_fd);
                 continue;
             }
-            if (m & (EPOLLHUP | EPOLLERR)) {
-                close_conn(ep, fd);
+            // The fd may already have been closed earlier in this same batch.
+            if (g_conns.find(fd) == g_conns.end()) continue;
+
+            if (m & poller::kError) {
+                close_conn(p, fd);
                 continue;
             }
-            if ((m & EPOLLOUT) && !flush_pending(ep, fd)) {
-                close_conn(ep, fd);
+            if ((m & poller::kWrite) && !flush_pending(p, fd)) {
+                close_conn(p, fd);
                 continue;
             }
-            if ((m & (EPOLLIN | EPOLLRDHUP)) && !drain_and_echo(ep, fd)) {
-                close_conn(ep, fd);
+            if ((m & (poller::kRead | poller::kHangup)) && !drain_and_echo(p, fd)) {
+                close_conn(p, fd);
                 continue;
             }
         }
