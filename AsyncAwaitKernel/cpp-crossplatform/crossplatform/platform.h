@@ -180,8 +180,7 @@ inline void logf(const char* fmt, ...) {
     va_start(ap, fmt);
     std::vsnprintf(msg, sizeof(msg), fmt, ap);
     va_end(ap);
-    std::printf("[%7.2fs][tid %-6llu] %s
-", uptime_seconds(), thread_id(), msg);
+    std::printf("[%7.2fs][tid %-6llu] %s\n", uptime_seconds(), thread_id(), msg);
 }
 
 // Same, to stderr.
@@ -191,8 +190,7 @@ inline void elogf(const char* fmt, ...) {
     va_start(ap, fmt);
     std::vsnprintf(msg, sizeof(msg), fmt, ap);
     va_end(ap);
-    std::fprintf(stderr, "[%7.2fs][tid %-6llu] %s
-", uptime_seconds(), thread_id(), msg);
+    std::fprintf(stderr, "[%7.2fs][tid %-6llu] %s\n", uptime_seconds(), thread_id(), msg);
 }
 
 // ---------------------------------------------------------------- socket I/O
@@ -274,7 +272,11 @@ inline socket_t make_listener(int port, int backlog) {
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port = htons((unsigned short)port);
 
-    if (bind(fd, (sockaddr*)&addr, sizeof(addr)) != 0) die("bind");
+    if (bind(fd, (sockaddr*)&addr, sizeof(addr)) != 0) {
+        std::fprintf(stderr, "bind: %s\n", error_string(last_error()).c_str());
+        std::fprintf(stderr, "port %d is busy - is the other server still running?\n", port);
+        std::exit(1);
+    }
     if (listen(fd, backlog) != 0) die("listen");
     return fd;
 }

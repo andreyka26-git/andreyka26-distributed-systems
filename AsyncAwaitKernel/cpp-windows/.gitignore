@@ -1,0 +1,6 @@
+build/
+blocking_server
+epoll_server
+*.exe
+*.o
+*.obj

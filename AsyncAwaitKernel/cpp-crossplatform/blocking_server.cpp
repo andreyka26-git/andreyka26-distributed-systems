@@ -46,7 +46,9 @@
 
 namespace {
 
-constexpr int kPort = 9001;
+// Both servers listen on the SAME port: you run one at a time, and
+// demo_clients.py always dials the same place.
+constexpr int kPort = 9000;
 constexpr int kBacklog = 128;
 constexpr size_t kBufSize = 4096;
 

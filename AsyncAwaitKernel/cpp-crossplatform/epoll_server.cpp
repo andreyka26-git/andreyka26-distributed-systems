@@ -54,7 +54,9 @@
 
 namespace {
 
-constexpr int kPort = 9002;
+// Both servers listen on the SAME port: you run one at a time, and
+// demo_clients.py always dials the same place.
+constexpr int kPort = 9000;
 constexpr int kBacklog = 128;
 constexpr size_t kBufSize = 4096;
 
@@ -195,10 +197,10 @@ int main() {
         // *** THE ONLY PLACE THIS PROCESS EVER SLEEPS ***
         // rdllist empty -> this thread goes on ep->wq, TASK_INTERRUPTIBLE, schedule().
         // Observe: /proc/<pid>/task/<tid>/wchan -> ep_poll
-        plat::logf("epoll_wait: sleeping, watching %zu connection(s) + the listener",
-                   g_conns.size());
+        plat::logf("%s wait: sleeping, watching %zu connection(s) + the listener",
+                   poller::Poller::name(), g_conns.size());
         int n = p.wait(events);
-        plat::logf("epoll_wait: woke with %d ready fd(s)", n);
+        plat::logf("%s wait: woke with %d ready fd(s)", poller::Poller::name(), n);
 
         // n events, each one an epitem the softirq pushed onto rdllist, re-polled by
         // epoll_wait for its live mask. No scanning of all fds - unlike select/poll,
