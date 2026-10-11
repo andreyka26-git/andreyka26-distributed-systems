@@ -10,7 +10,7 @@ visitor ──► server:8000 (public)            server:9000 (agents) ◄──
             [ public machine, Docker ]                               [ your laptop, Python ]
 ```
 
-How the tunnel itself works is explained in [../NgrokPoc/README.md](../NgrokPoc/README.md). `server.py` is identical; the agent only differs in taking the server address, the domain and the local port as arguments instead of hardcoding them.
+How the tunnel itself works is explained in [../NgrokPoc/README.md](../NgrokPoc/README.md). `server.py` is identical; the agent only differs in taking the server address, the app name and the local port as arguments instead of hardcoding them.
 
 ## 1. Build and push the server image (on your laptop)
 
@@ -73,38 +73,35 @@ cd app
 python -m http.server 3000
 ```
 
-Then, in another terminal, dial the server. With no domain, use the server's IP for both the address and the public name:
+Then, in another terminal, dial the server and claim a name:
 
 ```
-python agent/agent.py <server IP> <server IP> 3000
+python agent/agent.py <server IP> app1 3000
 ```
 
-The arguments are: where the server is, the public name visitors will type, and the local port to forward to.
+The arguments are: where the server is, the app name (letters, digits, `_` and `-`), and the local port to forward to. The agent prints the public URL. If another agent already holds the name, the server refuses it and the agent exits.
 
 ## 4. Visit it
 
-Open `http://<server IP>:8000/` in a browser. Any path works: `http://<server IP>:8000/myapp` reaches `http://127.0.0.1:3000/myapp` on your laptop.
+Open `http://<server IP>:8000/app1/` in a browser. The server cuts the app name off, so `http://<server IP>:8000/app1/some/page` reaches `http://127.0.0.1:3000/some/page` on your laptop.
 
-## Optional: use domain names
+Port 9000 is for agents only; opening it in a browser does nothing useful.
 
-The server routes by the `Host:` header, so one server can tunnel many names at once, each to a different agent. Every name must resolve to the server's IP; one wildcard DNS record covers all of them:
+## Several apps at once
 
-```
-*.example.com   A   <server IP>
-```
-
-Then register a name and visit it:
+One server tunnels many apps, each to its own agent. Run one agent per app, each with a different name:
 
 ```
-python agent/agent.py <server IP> app.example.com 3000
+python agent/agent.py <server IP> app1 3000
+python agent/agent.py <server IP> app2 4000
 ```
 
-Open `http://app.example.com:8000/`.
+`http://<server IP>:8000/app1/` and `http://<server IP>:8000/app2/` now reach two different local ports, possibly on two different laptops.
 
 ## Before you leave it running
 
 This is still the teaching version, now on the open internet:
 
-- **No auth.** Anyone who can reach port 9000 can register any domain, including one you are using, and receive its visitors. Restrict port 9000 to your own IP in the firewall.
+- **No auth.** Anyone who can reach port 9000 can register any free name and serve whatever they like under your server's address. Restrict port 9000 to your own IP in the firewall.
 - **No TLS.** Visitor traffic and the agent connection are plain text.
 - **No reconnect.** If the connection drops, restart the agent.

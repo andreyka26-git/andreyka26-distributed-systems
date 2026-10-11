@@ -3,9 +3,9 @@ import sys
 import threading
 from contextlib import suppress
 
-# python agent.py tunnel.example.com app.example.com 3000
+# python agent.py 203.0.113.7 app1 3000
 SERVER_HOST = sys.argv[1]      # the public ngrok server we dial
-DOMAIN = sys.argv[2]           # the public name visitors will use; the server routes by it
+APP = sys.argv[2]              # the name we claim; visitors open http://<server>:8000/<name>/
 LOCAL_PORT = int(sys.argv[3])  # where the local app listens
 
 SERVER = (SERVER_HOST, 9000)       # the ngrok server we dial (its agent port)
@@ -24,14 +24,16 @@ def pipe(src, dst):
 # Control plane connection: we dial OUT, so it works from behind NAT or a firewall.
 # used to signal there is incoming data plane connection
 control_connection = socket.create_connection(SERVER)
-control_connection.sendall(f"REGISTER {DOMAIN}\n".encode())
-print(f"http://{DOMAIN} -> http://{LOCAL[0]}:{LOCAL[1]}")
+control_connection.sendall(f"REGISTER {APP}\n".encode())
+if control_connection.recv(3) != b"OK\n":  # the server keeps names unique
+    sys.exit(f"the name '{APP}' is already taken on {SERVER_HOST}")
+print(f"http://{SERVER_HOST}:8000/{APP}/ -> http://{LOCAL[0]}:{LOCAL[1]}/")
 
 # the server sends one byte per visitor
 while control_connection.recv(1):
     # data plane connection
     dataplane_connection = socket.create_connection(SERVER)
-    dataplane_connection.sendall(f"DATA {DOMAIN}\n".encode())
+    dataplane_connection.sendall(f"DATA {APP}\n".encode())
 
     local = socket.create_connection(LOCAL)
 
