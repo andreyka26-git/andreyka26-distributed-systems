@@ -1,0 +1,13 @@
+# Laptop side: build the server image and push it to the registry.
+#   docker compose build
+#   docker compose push
+services:
+  ngrok-server:
+    build: ./server
+    # Not andreyka26-git? Change this to your own registry path, e.g.
+    # ghcr.io/<your-github-user>/ngrok-server:latest (same in docker-compose.prod.yml).
+    image: ghcr.io/andreyka26-git/ngrok-server:latest
+    init: true
+    ports:
+      - "8000:8000"   # public side (visitors)
+      - "9000:9000"   # control side (agents)
