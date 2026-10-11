@@ -1,0 +1,46 @@
+# visitor (you) ──► server ◄── agent ──► app
+#                  [ public network ]
+#                              [ private network ]
+#
+# The app is only on the private network: your machine cannot reach it.
+# The agent sits on both, like a laptop that can reach the internet and its own localhost.
+
+#  your machine
+#        │  :8000  (DNAT, only for server)
+#  ┌─────┼──────────────────────── host netns ───────────────────────────┐
+#  │  br-public (172.18.0.1)                br-private (internal)        │
+#  │     │          │                          │           │             │
+#  │   veth       veth                       veth         veth           │
+#  └─────┼──────────┼──────────────────────────┼───────────┼─────────────┘
+#        │          │                          │           │
+#  ┌─ server ─┐  ┌──┴──────── agent ───────────┴┐     ┌─ app ─┐
+#  │ eth0     │  │ eth0 (public)  eth1 (private)│     │ eth0  │
+#  │ :8000    │  │                              │     │ :3000 │
+#  └──────────┘  └──────────────────────────────┘     └───────┘
+
+services:
+  server:  # the public ngrok server
+    build: server
+    init: true
+    networks: [public]
+    ports:
+      - "8000:8000"  # the only port your machine can reach
+    expose:
+      - "9000"  # agent port: reachable by containers on the public network, not by your machine
+
+  app:  # the "local app" we want to expose
+    build: app
+    init: true
+    networks: [private]
+
+  agent:  # dials OUT to the server, forwards visitors to the app
+    build: agent
+    init: true
+    networks: [public, private]
+    depends_on: [server, app]
+    restart: on-failure  # the server may not be listening yet on the first try
+
+networks:
+  public:
+  private:
+    internal: true  # no route in from, or out to, the outside world
